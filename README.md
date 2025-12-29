@@ -6,7 +6,7 @@ A Chrome extension that adds a "Queue" button to LinkedIn search results and aut
 
 1. **Search Results** - Adds "+ Queue" buttons next to each person in LinkedIn search
 2. **Queue Management** - Click the button to add profiles to a connection queue
-3. **Auto-Connect** - The extension automatically connects with queued profiles every 1-3 minutes
+3. **Auto-Connect** - The extension automatically connects with queued profiles at configurable intervals
 
 Everything runs entirely in the browser - no server, no external dependencies.
 
@@ -29,15 +29,21 @@ The extension will:
 - Open each profile in a background tab
 - Click the Connect button
 - Send connection without a note
-- Wait 1-3 minutes randomly before the next one
+- Wait randomly between min/max delay before the next one
 - Close the tab automatically
+- Detect weekly invitation limits and stop gracefully
 
 ## Extension Popup
 
 Click the extension icon to:
-- See queue status (pending, completed, failed)
-- Start/Pause auto-connecting
-- Clear pending items from queue
+- See queue status (total count, pending, completed, failed)
+- Configure min/max delay between connections
+- **Connect Next Now** - Skip the timer and connect immediately
+- **Start/Pause** - Control auto-connecting
+- **Clear Queue** - Remove all pending items
+- **Click on a person** - Opens their LinkedIn profile in a new tab
+- **Retry failed items** - Click ↻ to re-queue failed connections
+- **View failure reasons** - See why a connection failed (e.g., "Weekly invitation limit reached")
 
 ## Files
 
@@ -54,9 +60,9 @@ linkedin-autoconnect/
 
 ## Configuration
 
-Edit `extension/background.js` to change timing:
-- `MIN_DELAY` - Minimum minutes between connections (default: 1)
-- `MAX_DELAY` - Maximum minutes between connections (default: 3)
+Adjust timing directly in the popup:
+- **Min delay** - Minimum minutes between connections (default: 1)
+- **Max delay** - Maximum minutes between connections (default: 3)
 
 ## Troubleshooting
 
@@ -67,6 +73,12 @@ Edit `extension/background.js` to change timing:
 **Connect button not found on profile**
 - Some profiles only show "Follow" or "Message"
 - The extension will mark these as "failed" and move on
+- Click ↻ to retry if needed
+
+**Weekly invitation limit reached**
+- LinkedIn limits how many invitations you can send per week
+- The extension detects this and marks the connection as failed
+- Wait until next week and retry the failed items
 
 **Extension not working after Chrome restart**
 - Open the extension popup and click "Start" to resume processing

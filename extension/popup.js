@@ -48,7 +48,7 @@ async function updateUI() {
   serverStatusEl.className = 'status-value active';
   toggleBtn.disabled = false;
 
-  queueCountEl.textContent = `${status.pending} pending`;
+  queueCountEl.textContent = `${status.queue.length} total (${status.pending} pending)`;
 
   // Enable/disable connect now button based on queue
   connectNowBtn.disabled = status.pending === 0;
@@ -70,21 +70,17 @@ async function updateUI() {
     queueListEl.innerHTML = status.queue
       .slice()
       .reverse()
-      .slice(0, 10)
       .map(item => `
         <div class="queue-item" data-id="${item.id}">
           <div class="queue-item-info" data-url="${escapeHtml(item.profileUrl)}" title="Click to open profile">
             <div class="queue-item-name">${escapeHtml(item.name)}</div>
-            <div class="queue-item-status ${item.status}">${item.status}</div>
+            <div class="queue-item-status ${item.status}">${item.status}${item.status === 'failed' && item.error ? ': ' + escapeHtml(item.error) : ''}</div>
           </div>
+          ${item.status === 'failed' ? `<button class="queue-item-retry" data-id="${item.id}" title="Retry">↻</button>` : ''}
           <button class="queue-item-remove" data-id="${item.id}" title="Remove">×</button>
         </div>
       `)
       .join('');
-
-    if (status.queue.length > 10) {
-      queueListEl.innerHTML += `<div style="color:#666;text-align:center;padding:8px;">+${status.queue.length - 10} more</div>`;
-    }
 
     // Add click handler to open profile
     queueListEl.querySelectorAll('.queue-item-info').forEach(info => {
@@ -96,10 +92,21 @@ async function updateUI() {
       });
     });
 
+    // Add retry button handlers
+    queueListEl.querySelectorAll('.queue-item-retry').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        chrome.runtime.sendMessage({ action: 'retryItem', id }, () => {
+          updateUI();
+        });
+      });
+    });
+
     // Add remove button handlers
     queueListEl.querySelectorAll('.queue-item-remove').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent triggering the info click
+        e.stopPropagation();
         const id = btn.dataset.id;
         chrome.runtime.sendMessage({ action: 'removeFromQueue', id }, () => {
           updateUI();

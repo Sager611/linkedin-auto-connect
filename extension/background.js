@@ -420,6 +420,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true });
         break;
 
+      case 'retryItem':
+        const queueToRetry = await getQueue();
+        const itemToRetry = queueToRetry.find(item => item.id === request.id);
+        if (itemToRetry) {
+          itemToRetry.status = 'pending';
+          delete itemToRetry.error;
+          delete itemToRetry.completedAt;
+          await saveQueue(queueToRetry);
+          sendResponse({ success: true });
+        } else {
+          sendResponse({ success: false, error: 'Item not found' });
+        }
+        break;
+
       case 'removeByUrl':
         const queueByUrl = await getQueue();
         const filteredByUrl = queueByUrl.filter(item => item.profileUrl !== request.profileUrl);
