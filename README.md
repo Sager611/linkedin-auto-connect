@@ -1,6 +1,8 @@
 # LinkedIn Auto-Connect
 
-![Popup Screenshot](img/popup.png)
+<p align="center">
+  <img src="img/popup.png" alt="Popup Screenshot" height="300">
+</p>
 
 A Chrome extension that adds a "Queue" button to LinkedIn search results and automatically connects with people on a schedule.
 
