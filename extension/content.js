@@ -33,33 +33,72 @@ function extractProfileInfo(card) {
 function createQueueButton(profileInfo) {
   const button = document.createElement('button');
   button.className = 'queue-connect-btn';
-  button.textContent = '+ Queue';
-  button.title = 'Add to auto-connect queue';
-  
-  console.log('LinkedIn Auto-Connect: Creating queue button for profile:', profileInfo);
+  button.textContent = '+ Queue'; // Default state
+  button.dataset.profileUrl = profileInfo.profileUrl;
+
+  // Check if already in queue
+  chrome.runtime.sendMessage(
+    { action: 'isInQueue', profileUrl: profileInfo.profileUrl },
+    (response) => {
+      if (response?.inQueue) {
+        setButtonState(button, 'queued');
+      } else {
+        setButtonState(button, 'add');
+      }
+    }
+  );
 
   button.addEventListener('click', async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
+    const isQueued = button.classList.contains('queued');
     button.disabled = true;
-    button.textContent = 'Adding...';
 
-    chrome.runtime.sendMessage(
-      { action: 'addToQueue', profile: profileInfo },
-      (response) => {
-        if (response?.success) {
-          button.textContent = '✓ Queued';
-          button.classList.add('queued');
-        } else {
-          button.textContent = response?.error || 'Error';
+    if (isQueued) {
+      // Remove from queue
+      button.textContent = 'Removing...';
+      chrome.runtime.sendMessage(
+        { action: 'removeByUrl', profileUrl: profileInfo.profileUrl },
+        (response) => {
+          if (response?.success) {
+            setButtonState(button, 'add');
+          }
           button.disabled = false;
         }
-      }
-    );
+      );
+    } else {
+      // Add to queue
+      button.textContent = 'Adding...';
+      chrome.runtime.sendMessage(
+        { action: 'addToQueue', profile: profileInfo },
+        (response) => {
+          if (response?.success) {
+            setButtonState(button, 'queued');
+          } else if (response?.error === 'Already in queue') {
+            setButtonState(button, 'queued');
+          } else {
+            button.textContent = response?.error || 'Error';
+          }
+          button.disabled = false;
+        }
+      );
+    }
   });
 
   return button;
+}
+
+function setButtonState(button, state) {
+  if (state === 'queued') {
+    button.textContent = '✓ Queued';
+    button.title = 'Click to remove from queue';
+    button.classList.add('queued');
+  } else {
+    button.textContent = '+ Queue';
+    button.title = 'Add to auto-connect queue';
+    button.classList.remove('queued');
+  }
 }
 
 function injectButtons() {

@@ -2,8 +2,20 @@
 // Manages the connection queue and schedules auto-connect
 
 const ALARM_NAME = 'processQueue';
-const MIN_DELAY = 1; // 1 minute minimum
-const MAX_DELAY = 3; // 3 minutes maximum
+const DEFAULT_MIN_DELAY = 1; // 1 minute minimum
+const DEFAULT_MAX_DELAY = 3; // 3 minutes maximum
+
+// Get settings from storage
+async function getSettings() {
+  const { settings = { minDelay: DEFAULT_MIN_DELAY, maxDelay: DEFAULT_MAX_DELAY } } =
+    await chrome.storage.local.get('settings');
+  return settings;
+}
+
+// Save settings to storage
+async function saveSettings(newSettings) {
+  await chrome.storage.local.set({ settings: newSettings });
+}
 
 // Get queue from storage
 async function getQueue() {
@@ -61,14 +73,34 @@ async function scheduleNext() {
     return;
   }
 
-  // Random delay between MIN_DELAY and MAX_DELAY minutes
-  const delayMinutes = MIN_DELAY + Math.random() * (MAX_DELAY - MIN_DELAY);
+  // Get settings and calculate random delay
+  const settings = await getSettings();
+  const minDelay = settings.minDelay || DEFAULT_MIN_DELAY;
+  const maxDelay = settings.maxDelay || DEFAULT_MAX_DELAY;
+  const delayMinutes = minDelay + Math.random() * (maxDelay - minDelay);
   console.log(`Next connection in ${delayMinutes.toFixed(1)} minutes`);
 
   chrome.alarms.create(ALARM_NAME, { delayInMinutes: delayMinutes });
 }
 
-// Process the next item in queue
+// Process immediately (for manual trigger)
+async function processNow() {
+  const queue = await getQueue();
+  const nextItem = queue.find(item => item.status === 'pending');
+
+  if (!nextItem) {
+    return { success: false, error: 'No pending items' };
+  }
+
+  // Clear any pending alarm
+  chrome.alarms.clear(ALARM_NAME);
+
+  // Process the item
+  await processItem(nextItem);
+  return { success: true };
+}
+
+// Process the next item in queue (called by alarm or start)
 async function processNext() {
   const isProcessing = await getState();
   if (!isProcessing) return;
@@ -81,11 +113,20 @@ async function processNext() {
     return;
   }
 
+  await processItem(nextItem);
+}
+
+// Process a specific item
+async function processItem(nextItem) {
   console.log('Processing:', nextItem.name);
 
   // Update status to processing
-  nextItem.status = 'processing';
-  await saveQueue(queue);
+  let queue = await getQueue();
+  const itemToUpdate = queue.find(i => i.id === nextItem.id);
+  if (itemToUpdate) {
+    itemToUpdate.status = 'processing';
+    await saveQueue(queue);
+  }
 
   try {
     // Open the profile in a new tab
@@ -128,8 +169,11 @@ async function processNext() {
             // Close the tab after a delay
             setTimeout(() => chrome.tabs.remove(tab.id), 2000);
 
-            // Schedule next
-            scheduleNext();
+            // Schedule next if processing is active
+            const isProcessing = await getState();
+            if (isProcessing) {
+              scheduleNext();
+            }
           } catch (err) {
             console.error('Script execution error:', err);
             const queue = await getQueue();
@@ -139,17 +183,27 @@ async function processNext() {
               item.error = err.message;
               await saveQueue(queue);
             }
-            scheduleNext();
+            const isProcessing = await getState();
+            if (isProcessing) {
+              scheduleNext();
+            }
           }
         }, 3000); // Wait 3 seconds for page to fully render
       }
     });
   } catch (err) {
     console.error('Failed to open tab:', err);
-    nextItem.status = 'failed';
-    nextItem.error = err.message;
-    await saveQueue(queue);
-    scheduleNext();
+    const queue = await getQueue();
+    const item = queue.find(i => i.id === nextItem.id);
+    if (item) {
+      item.status = 'failed';
+      item.error = err.message;
+      await saveQueue(queue);
+    }
+    const isProcessing = await getState();
+    if (isProcessing) {
+      scheduleNext();
+    }
   }
 }
 
@@ -241,6 +295,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         break;
 
+      case 'getSettings':
+        const settings = await getSettings();
+        sendResponse(settings);
+        break;
+
+      case 'setSettings':
+        await saveSettings(request.settings);
+        sendResponse({ success: true });
+        break;
+
       case 'start':
         await setState(true);
         processNext();
@@ -251,6 +315,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         await setState(false);
         chrome.alarms.clear(ALARM_NAME);
         sendResponse({ success: true });
+        break;
+
+      case 'connectNow':
+        const nowResult = await processNow();
+        sendResponse(nowResult);
+        break;
+
+      case 'removeFromQueue':
+        const queueToFilter = await getQueue();
+        const filteredQueue = queueToFilter.filter(item => item.id !== request.id);
+        await saveQueue(filteredQueue);
+        sendResponse({ success: true });
+        break;
+
+      case 'removeByUrl':
+        const queueByUrl = await getQueue();
+        const filteredByUrl = queueByUrl.filter(item => item.profileUrl !== request.profileUrl);
+        await saveQueue(filteredByUrl);
+        sendResponse({ success: true });
+        break;
+
+      case 'isInQueue':
+        const checkQueue = await getQueue();
+        const inQueue = checkQueue.some(item => item.profileUrl === request.profileUrl && item.status === 'pending');
+        sendResponse({ inQueue });
         break;
 
       case 'clear':

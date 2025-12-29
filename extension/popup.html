@@ -107,6 +107,74 @@
     .queue-item-status.processing {
       color: #0a66c2;
     }
+    .queue-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .queue-item-info {
+      flex: 1;
+      overflow: hidden;
+    }
+    .queue-item-remove {
+      background: none;
+      border: none;
+      color: #999;
+      cursor: pointer;
+      padding: 4px 8px;
+      font-size: 16px;
+      flex: none;
+    }
+    .queue-item-remove:hover {
+      color: #b24020;
+    }
+    .settings {
+      padding: 12px;
+      background: #f3f6f8;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    .settings-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    .settings-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .settings-row:last-child {
+      margin-bottom: 0;
+    }
+    .settings-row label {
+      color: #666;
+      min-width: 80px;
+    }
+    .settings-row input {
+      width: 60px;
+      padding: 6px 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .settings-row span {
+      color: #666;
+    }
+    .btn-connect-now {
+      width: 100%;
+      margin-bottom: 12px;
+      background: #057642;
+      color: white;
+    }
+    .btn-connect-now:hover {
+      background: #045e35;
+    }
+    .btn-connect-now:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
@@ -127,6 +195,22 @@
         <span class="status-value" id="processing-status">-</span>
       </div>
     </div>
+
+    <div class="settings">
+      <div class="settings-title">Interval Settings</div>
+      <div class="settings-row">
+        <label>Min delay:</label>
+        <input type="number" id="min-delay" min="0.5" max="60" step="0.5" value="1">
+        <span>min</span>
+      </div>
+      <div class="settings-row">
+        <label>Max delay:</label>
+        <input type="number" id="max-delay" min="0.5" max="60" step="0.5" value="3">
+        <span>min</span>
+      </div>
+    </div>
+
+    <button class="btn-connect-now" id="connect-now-btn">Connect Next Now</button>
 
     <div class="queue-list" id="queue-list"></div>
 
