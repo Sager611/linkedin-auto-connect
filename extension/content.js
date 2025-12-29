@@ -90,14 +90,15 @@ function injectButtons() {
 
     if (processedProfiles.has(profileInfo.profileUrl)) return;
 
-    // Find the Connect or Follow button by aria-label (most reliable)
+    // Find the action button area (Connect, Follow, or Message)
     const actionBtn = card.querySelector(
       'a[aria-label*="connect" i], button[aria-label*="connect" i], ' +
-      'a[aria-label*="follow" i], button[aria-label*="follow" i]'
+      'a[aria-label*="follow" i], button[aria-label*="follow" i], ' +
+      'a[aria-label="Message" i], button[aria-label="Message" i]'
     );
 
     if (!actionBtn) {
-      console.log('LinkedIn Auto-Connect: No connect/follow button found for:', profileInfo.name);
+      console.log('LinkedIn Auto-Connect: No action button found for:', profileInfo.name);
       return;
     }
 
@@ -105,14 +106,34 @@ function injectButtons() {
 
     const button = createQueueButton(profileInfo);
 
-    // Create a wrapper div for proper positioning
-    const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'display: inline-block; margin-right: 8px;';
-    wrapper.appendChild(button);
+    // Check if this is a Message-only card (no Connect/Follow)
+    const isMessageOnly = actionBtn.getAttribute('aria-label') === 'Message';
+    if (isMessageOnly) {
+      button.style.marginTop = '32px';
+    }
 
-    // Insert before the action button's container
-    const actionContainer = actionBtn.closest('[data-view-name]') || actionBtn.parentElement;
-    actionContainer.parentElement.insertBefore(wrapper, actionContainer);
+    // Find the relationship-building-button container which holds all action buttons
+    const relationshipContainer = card.querySelector('[data-view-name="relationship-building-button"]');
+
+    if (relationshipContainer) {
+      // Create wrapper and insert at the beginning of the container
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = 'display: inline-flex; align-items: center; margin-right: 8px;';
+      wrapper.setAttribute('data-view-name', 'queue-connect-action');
+      wrapper.appendChild(button);
+
+      // Insert as first child of the relationship container's inner div
+      const innerContainer = relationshipContainer.firstElementChild;
+      if (innerContainer) {
+        innerContainer.insertBefore(wrapper, innerContainer.firstChild);
+      } else {
+        relationshipContainer.insertBefore(wrapper, relationshipContainer.firstChild);
+      }
+    } else {
+      // Fallback: insert right after the action button
+      button.style.marginLeft = '8px';
+      actionBtn.parentElement.appendChild(button);
+    }
 
     console.log('LinkedIn Auto-Connect: Added button for:', profileInfo.name);
   });
