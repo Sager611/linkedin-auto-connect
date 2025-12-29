@@ -285,7 +285,8 @@ function clickConnectButton() {
       let moreBtn = null;
       for (const btn of allButtons) {
         const ariaLabel = btn.getAttribute('aria-label') || '';
-        if (ariaLabel.toLowerCase().includes('more')) {
+        const text = btn.textContent.trim().toLowerCase();
+        if (ariaLabel.toLowerCase() === 'more actions' || text === 'more') {
           moreBtn = btn;
           break;
         }
@@ -295,40 +296,64 @@ function clickConnectButton() {
         console.log('LinkedIn Auto-Connect: Clicking More button');
         moreBtn.click();
 
+        // Wait for dropdown to open
         setTimeout(() => {
           // Look for Connect in dropdown menu
-          const menuItems = document.querySelectorAll('[role="button"], [role="menuitem"]');
+          const menuItems = document.querySelectorAll('.artdeco-dropdown__item[role="button"], .artdeco-dropdown__item');
+          console.log('LinkedIn Auto-Connect: Found', menuItems.length, 'menu items');
 
           for (const item of menuItems) {
             const ariaLabel = (item.getAttribute('aria-label') || '').toLowerCase();
-            const text = item.textContent.toLowerCase();
 
-            if (ariaLabel.includes('connect') || text.includes('connect')) {
-              console.log('LinkedIn Auto-Connect: Clicking Connect in menu');
+            // Look for "invite ... to connect"
+            if (ariaLabel.includes('to connect')) {
+              console.log('LinkedIn Auto-Connect: Clicking Connect in menu:', ariaLabel);
               item.click();
 
+              // Wait for modal to appear
               setTimeout(() => {
-                // Find and click Send button
+                // Check for weekly limit first
+                const limitModal = document.querySelector('.ip-fuse-limit-alert');
+                if (limitModal) {
+                  console.log('LinkedIn Auto-Connect: Weekly invitation limit reached!');
+                  const gotItBtn = limitModal.querySelector('button[aria-label="Got it"]');
+                  if (gotItBtn) gotItBtn.click();
+                  resolve({ success: false, error: 'Weekly invitation limit reached' });
+                  return;
+                }
+
+                // Check if there's a Send button (modal appeared)
                 const buttons = document.querySelectorAll('button');
+                let sendBtn = null;
                 for (const btn of buttons) {
-                  if (btn.textContent.toLowerCase().includes('send')) {
-                    btn.click();
+                  const btnText = btn.textContent.toLowerCase();
+                  if (btnText.includes('send')) {
+                    sendBtn = btn;
                     break;
                   }
                 }
 
-                // Check for weekly limit after clicking send
-                setTimeout(() => {
-                  const limitModal = document.querySelector('.ip-fuse-limit-alert');
-                  if (limitModal) {
-                    console.log('LinkedIn Auto-Connect: Weekly invitation limit reached!');
-                    const gotItBtn = limitModal.querySelector('button[aria-label="Got it"]');
-                    if (gotItBtn) gotItBtn.click();
-                    resolve({ success: false, error: 'Weekly invitation limit reached' });
-                  } else {
-                    resolve({ success: true, note: 'Used More menu' });
-                  }
-                }, 1500);
+                if (sendBtn) {
+                  console.log('LinkedIn Auto-Connect: Clicking Send button');
+                  sendBtn.click();
+
+                  // Check for weekly limit after clicking send
+                  setTimeout(() => {
+                    const limitModal = document.querySelector('.ip-fuse-limit-alert');
+                    if (limitModal) {
+                      console.log('LinkedIn Auto-Connect: Weekly invitation limit reached!');
+                      const gotItBtn = limitModal.querySelector('button[aria-label="Got it"]');
+                      if (gotItBtn) gotItBtn.click();
+                      resolve({ success: false, error: 'Weekly invitation limit reached' });
+                    } else {
+                      resolve({ success: true, note: 'Used More menu' });
+                    }
+                  }, 1500);
+                } else {
+                  // No Send button - connection was sent directly
+                  console.log('LinkedIn Auto-Connect: Connection sent directly (no modal)');
+                  resolve({ success: true, note: 'Used More menu, sent directly' });
+                }
               }, 1000);
               return;
             }
