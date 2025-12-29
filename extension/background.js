@@ -210,13 +210,13 @@ async function processItem(nextItem) {
 // This function runs in the context of the LinkedIn profile page
 function clickConnectButton() {
   return new Promise((resolve) => {
-    try {
-      console.log('LinkedIn Auto-Connect: Looking for Connect button...');
-
-      // Find Connect button by checking aria-label contains "connect" (case insensitive)
+    // Find and click Connect button directly on the profile page
+    function findAndClickConnectButton() {
       const allButtons = document.querySelectorAll('button, a');
-      let connectBtn = null;
 
+      console.log('LinkedIn Auto-Connect: Looking for Connect button on page...');
+
+      let connectBtn = null;
       for (const btn of allButtons) {
         const ariaLabel = btn.getAttribute('aria-label') || '';
         if (ariaLabel.toLowerCase().includes('connect') && !ariaLabel.toLowerCase().includes('disconnect')) {
@@ -264,7 +264,6 @@ function clickConnectButton() {
               const limitModal = document.querySelector('.ip-fuse-limit-alert');
               if (limitModal) {
                 console.log('LinkedIn Auto-Connect: Weekly invitation limit reached!');
-                // Click "Got it" to dismiss modal
                 const gotItBtn = limitModal.querySelector('button[aria-label="Got it"]');
                 if (gotItBtn) gotItBtn.click();
                 resolve({ success: false, error: 'Weekly invitation limit reached' });
@@ -278,11 +277,29 @@ function clickConnectButton() {
           }
         }, 1500);
 
-        return; // Don't resolve yet, wait for setTimeout
+        return true; // Found and clicked
       }
 
-      // Check for "More" button that might contain Connect
+      // Check if already connected (shows Message button but no Connect)
+      for (const btn of allButtons) {
+        const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+        if (ariaLabel === 'message' || ariaLabel.startsWith('message ')) {
+          console.log('LinkedIn Auto-Connect: Found Message button - may already be connected');
+          resolve({ success: false, error: 'Already connected or no Connect option' });
+          return true; // Handled (even though failed)
+        }
+      }
+
+      return false; // Not found
+    }
+
+    try {
+      console.log('LinkedIn Auto-Connect: Looking for More button first...');
+
+      const allButtons = document.querySelectorAll('button, a');
       let moreBtn = null;
+
+      // Check for "More" button that might contain Connect FIRST
       for (const btn of allButtons) {
         const ariaLabel = btn.getAttribute('aria-label') || '';
         const text = btn.textContent.trim().toLowerCase();
@@ -302,11 +319,13 @@ function clickConnectButton() {
           const menuItems = document.querySelectorAll('.artdeco-dropdown__item[role="button"], .artdeco-dropdown__item');
           console.log('LinkedIn Auto-Connect: Found', menuItems.length, 'menu items');
 
+          let foundConnect = false;
           for (const item of menuItems) {
             const ariaLabel = (item.getAttribute('aria-label') || '').toLowerCase();
 
             // Look for "invite ... to connect"
             if (ariaLabel.includes('to connect')) {
+              foundConnect = true;
               console.log('LinkedIn Auto-Connect: Clicking Connect in menu:', ariaLabel);
               item.click();
 
@@ -355,27 +374,33 @@ function clickConnectButton() {
                   resolve({ success: true, note: 'Used More menu, sent directly' });
                 }
               }, 1000);
-              return;
+              break;
             }
           }
-          resolve({ success: false, error: 'Connect not found in More menu' });
+
+          // If Connect not found in More menu, fallback to direct Connect button
+          if (!foundConnect) {
+            console.log('LinkedIn Auto-Connect: Connect not in More menu, trying direct button...');
+
+            setTimeout(() => {
+              const found = findAndClickConnectButton();
+              if (!found) {
+                console.log('LinkedIn Auto-Connect: No Connect button found');
+                resolve({ success: false, error: 'Connect button not found' });
+              }
+            }, 300);
+          }
         }, 500);
 
         return; // Don't resolve yet, wait for setTimeout
       }
 
-      // Check if already connected (shows Message button but no Connect)
-      for (const btn of allButtons) {
-        const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
-        if (ariaLabel === 'message' || ariaLabel.startsWith('message ')) {
-          console.log('LinkedIn Auto-Connect: Found Message button - may already be connected');
-          resolve({ success: false, error: 'Already connected or no Connect option' });
-          return;
-        }
+      // If no More button, fallback to direct Connect button
+      const found = findAndClickConnectButton();
+      if (!found) {
+        console.log('LinkedIn Auto-Connect: No Connect button found');
+        resolve({ success: false, error: 'Connect button not found' });
       }
-
-      console.log('LinkedIn Auto-Connect: No Connect button found');
-      resolve({ success: false, error: 'Connect button not found' });
     } catch (err) {
       console.error('LinkedIn Auto-Connect: Error:', err);
       resolve({ success: false, error: err.message });
