@@ -1,8 +1,6 @@
 // LinkedIn Auto-Connect Content Script
 // Injects "Queue Connect" buttons on search results
 
-const SERVER_URL = 'http://localhost:3847';
-
 // Track which profiles already have buttons
 const processedProfiles = new Set();
 
@@ -47,26 +45,18 @@ function createQueueButton(profileInfo) {
     button.disabled = true;
     button.textContent = 'Adding...';
 
-    try {
-      const response = await fetch(`${SERVER_URL}/api/queue`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(profileInfo)
-      });
-
-      if (response.ok) {
-        button.textContent = '✓ Queued';
-        button.classList.add('queued');
-      } else {
-        const data = await response.json();
-        button.textContent = data.error || 'Error';
-        button.disabled = false;
+    chrome.runtime.sendMessage(
+      { action: 'addToQueue', profile: profileInfo },
+      (response) => {
+        if (response?.success) {
+          button.textContent = '✓ Queued';
+          button.classList.add('queued');
+        } else {
+          button.textContent = response?.error || 'Error';
+          button.disabled = false;
+        }
       }
-    } catch (err) {
-      button.textContent = 'Server offline';
-      button.disabled = false;
-      console.error('LinkedIn Auto-Connect: Failed to add to queue:', err);
-    }
+    );
   });
 
   return button;

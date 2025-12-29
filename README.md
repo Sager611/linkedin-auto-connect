@@ -1,95 +1,75 @@
 # LinkedIn Auto-Connect
 
-A purely local automation tool that adds a "Queue" button to LinkedIn search results and automatically sends connection requests.
+A Chrome extension that adds a "Queue" button to LinkedIn search results and automatically connects with people on a schedule.
 
 ## How It Works
 
-1. **Chrome Extension** - Adds "+ Queue" buttons to LinkedIn search results
-2. **Local Server** - Manages the queue of profiles to connect with
-3. **Playwright Automation** - Opens profiles and sends connection requests
+1. **Search Results** - Adds "+ Queue" buttons next to each person in LinkedIn search
+2. **Queue Management** - Click the button to add profiles to a connection queue
+3. **Auto-Connect** - The extension automatically connects with queued profiles every 1-3 minutes
+
+Everything runs entirely in the browser - no server, no external dependencies.
 
 ## Setup
-
-### 1. Install Dependencies
-
-```bash
-cd linkedin-autoconnect
-npm install
-npx playwright install chromium
-```
-
-### 2. Load the Chrome Extension
 
 1. Open Chrome and go to `chrome://extensions`
 2. Enable "Developer mode" (toggle in top right)
 3. Click "Load unpacked"
 4. Select the `extension` folder from this project
 
-### 3. Start the Server
-
-```bash
-npm start
-```
+That's it!
 
 ## Usage
 
-1. **Start the server** - Run `npm start` in terminal
-2. **Go to LinkedIn** - Search for people: `linkedin.com/search/results/people/`
-3. **Queue profiles** - Click "+ Queue" button on profiles you want to connect with
-4. **Start processing** - Click the extension icon and press "Start"
+1. **Go to LinkedIn** - Search for people: `linkedin.com/search/results/people/`
+2. **Queue profiles** - Click "+ Queue" button on profiles you want to connect with
+3. **Start processing** - Click the extension icon and press "Start"
 
-The automation will:
-- Open each profile in a browser window
+The extension will:
+- Open each profile in a background tab
 - Click the Connect button
-- Send without a note (blank request)
+- Send connection without a note
 - Wait 1-3 minutes randomly before the next one
-
-## First Time Login
-
-The first time the automation runs, you'll need to log in to LinkedIn in the browser window that opens. After that, your session is saved in `server/auth.json`.
+- Close the tab automatically
 
 ## Extension Popup
 
 Click the extension icon to:
-- See queue status
-- Start/Pause processing
-- Clear pending items
+- See queue status (pending, completed, failed)
+- Start/Pause auto-connecting
+- Clear pending items from queue
 
 ## Files
 
 ```
 linkedin-autoconnect/
-├── extension/           # Chrome extension
-│   ├── manifest.json
-│   ├── content.js       # Injects buttons on LinkedIn
-│   ├── content.css
-│   ├── popup.html       # Extension popup UI
-│   ├── popup.js
-│   └── background.js
-├── server/
-│   ├── index.js         # Express server with queue
-│   ├── automation.js    # Playwright automation
-│   ├── queue.json       # Persisted queue (created at runtime)
-│   └── auth.json        # LinkedIn session (created at runtime)
-└── package.json
+└── extension/
+    ├── manifest.json    # Extension configuration
+    ├── background.js    # Queue management & scheduling
+    ├── content.js       # Injects buttons on search page
+    ├── content.css      # Button styling
+    ├── popup.html       # Extension popup UI
+    └── popup.js         # Popup logic
 ```
 
 ## Configuration
 
-Edit `server/index.js` to change:
-- `PORT` - Server port (default: 3847)
-- Delay range in `processNext()` function (default: 60-180 seconds)
+Edit `extension/background.js` to change timing:
+- `MIN_DELAY` - Minimum minutes between connections (default: 1)
+- `MAX_DELAY` - Maximum minutes between connections (default: 3)
 
 ## Troubleshooting
 
-**"Server offline" in extension**
-- Make sure the server is running: `npm start`
+**Button not appearing**
+- Refresh the LinkedIn search page
+- Make sure the extension is enabled in `chrome://extensions`
 
-**"Not logged in" error**
-- The automation browser needs you to log in once. Run the server, start processing with at least one profile queued, and log in when the browser opens.
+**Connect button not found on profile**
+- Some profiles only show "Follow" or "Message"
+- The extension will mark these as "failed" and move on
 
-**Connect button not found**
-- LinkedIn's UI varies. Some profiles show "Follow" instead of "Connect". The script tries multiple selectors but may not work for all profiles.
+**Extension not working after Chrome restart**
+- Open the extension popup and click "Start" to resume processing
 
 ## Disclaimer
 

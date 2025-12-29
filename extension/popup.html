@@ -92,6 +92,21 @@
       text-align: center;
       padding: 20px;
     }
+    .queue-item-status {
+      text-transform: capitalize;
+    }
+    .queue-item-status.completed {
+      color: #057642;
+    }
+    .queue-item-status.failed {
+      color: #b24020;
+    }
+    .queue-item-status.pending {
+      color: #666;
+    }
+    .queue-item-status.processing {
+      color: #0a66c2;
+    }
   </style>
 </head>
 <body>
@@ -100,7 +115,7 @@
   <div id="content">
     <div class="status">
       <div class="status-item">
-        <span class="status-label">Server:</span>
+        <span class="status-label">Status:</span>
         <span class="status-value" id="server-status">Checking...</span>
       </div>
       <div class="status-item">

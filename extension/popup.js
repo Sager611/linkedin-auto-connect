@@ -1,17 +1,13 @@
-const SERVER_URL = 'http://localhost:3847';
+// Popup script - communicates with background service worker
 
-async function fetchStatus() {
-  try {
-    const response = await fetch(`${SERVER_URL}/api/status`);
-    if (!response.ok) throw new Error('Server error');
-    return await response.json();
-  } catch (err) {
-    return null;
-  }
+async function getStatus() {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'getStatus' }, resolve);
+  });
 }
 
 async function updateUI() {
-  const status = await fetchStatus();
+  const status = await getStatus();
 
   const serverStatusEl = document.getElementById('server-status');
   const queueCountEl = document.getElementById('queue-count');
@@ -20,16 +16,12 @@ async function updateUI() {
   const toggleBtn = document.getElementById('toggle-btn');
 
   if (!status) {
-    serverStatusEl.textContent = 'Offline';
+    serverStatusEl.textContent = 'Error';
     serverStatusEl.className = 'status-value paused';
-    queueCountEl.textContent = '-';
-    processingStatusEl.textContent = '-';
-    queueListEl.innerHTML = '<div class="error">Server not running.<br>Run: npm start</div>';
-    toggleBtn.disabled = true;
     return;
   }
 
-  serverStatusEl.textContent = 'Online';
+  serverStatusEl.textContent = 'Ready';
   serverStatusEl.className = 'status-value active';
   toggleBtn.disabled = false;
 
@@ -50,11 +42,13 @@ async function updateUI() {
     queueListEl.innerHTML = '<div style="color:#666;text-align:center;padding:20px;">Queue is empty</div>';
   } else {
     queueListEl.innerHTML = status.queue
+      .slice()
+      .reverse()
       .slice(0, 10)
       .map(item => `
         <div class="queue-item">
           <div class="queue-item-name">${escapeHtml(item.name)}</div>
-          <div class="queue-item-status">${item.status}</div>
+          <div class="queue-item-status ${item.status}">${item.status}</div>
         </div>
       `)
       .join('');
@@ -72,18 +66,19 @@ function escapeHtml(text) {
 }
 
 document.getElementById('toggle-btn').addEventListener('click', async () => {
-  const status = await fetchStatus();
-  if (!status) return;
+  const status = await getStatus();
+  const action = status.isProcessing ? 'pause' : 'start';
 
-  const endpoint = status.isProcessing ? '/api/pause' : '/api/start';
-  await fetch(`${SERVER_URL}${endpoint}`, { method: 'POST' });
-  updateUI();
+  chrome.runtime.sendMessage({ action }, () => {
+    updateUI();
+  });
 });
 
 document.getElementById('clear-btn').addEventListener('click', async () => {
   if (confirm('Clear all pending items from the queue?')) {
-    await fetch(`${SERVER_URL}/api/clear`, { method: 'POST' });
-    updateUI();
+    chrome.runtime.sendMessage({ action: 'clear' }, () => {
+      updateUI();
+    });
   }
 });
 
