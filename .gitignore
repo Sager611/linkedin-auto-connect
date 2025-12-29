@@ -17,6 +17,9 @@ coverage/
 *.crt
 *.key
 
+# Claude
+.claude/
+
 # VSCode
 .vscode/
 
