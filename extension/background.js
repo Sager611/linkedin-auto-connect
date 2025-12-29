@@ -443,8 +443,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       case 'isInQueue':
         const checkQueue = await getQueue();
-        const inQueue = checkQueue.some(item => item.profileUrl === request.profileUrl && item.status === 'pending');
-        sendResponse({ inQueue });
+        const queueItem = checkQueue.find(item => item.profileUrl === request.profileUrl);
+        sendResponse({
+          inQueue: queueItem?.status === 'pending',
+          status: queueItem?.status || null
+        });
         break;
 
       case 'clear':

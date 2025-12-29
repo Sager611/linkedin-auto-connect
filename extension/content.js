@@ -40,7 +40,9 @@ function createQueueButton(profileInfo) {
   chrome.runtime.sendMessage(
     { action: 'isInQueue', profileUrl: profileInfo.profileUrl },
     (response) => {
-      if (response?.inQueue) {
+      if (response?.status === 'completed') {
+        setButtonState(button, 'sent');
+      } else if (response?.inQueue) {
         setButtonState(button, 'queued');
       } else {
         setButtonState(button, 'add');
@@ -90,14 +92,21 @@ function createQueueButton(profileInfo) {
 }
 
 function setButtonState(button, state) {
-  if (state === 'queued') {
+  button.classList.remove('queued', 'sent');
+  if (state === 'sent') {
+    button.textContent = '✓ Sent';
+    button.title = 'Connection request sent';
+    button.classList.add('sent');
+    button.disabled = true;
+  } else if (state === 'queued') {
     button.textContent = '✓ Queued';
     button.title = 'Click to remove from queue';
     button.classList.add('queued');
+    button.disabled = false;
   } else {
     button.textContent = '+ Queue';
     button.title = 'Add to auto-connect queue';
-    button.classList.remove('queued');
+    button.disabled = false;
   }
 }
 

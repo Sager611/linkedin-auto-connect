@@ -35,3 +35,12 @@
 .queue-connect-btn.queued:hover {
   background-color: #057642;
 }
+
+.queue-connect-btn.sent {
+  background-color: #666;
+  cursor: default;
+}
+
+.queue-connect-btn.sent:hover {
+  background-color: #666;
+}
