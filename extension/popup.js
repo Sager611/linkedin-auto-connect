@@ -73,7 +73,7 @@ async function updateUI() {
       .slice(0, 10)
       .map(item => `
         <div class="queue-item" data-id="${item.id}">
-          <div class="queue-item-info">
+          <div class="queue-item-info" data-url="${escapeHtml(item.profileUrl)}" title="Click to open profile">
             <div class="queue-item-name">${escapeHtml(item.name)}</div>
             <div class="queue-item-status ${item.status}">${item.status}</div>
           </div>
@@ -86,9 +86,20 @@ async function updateUI() {
       queueListEl.innerHTML += `<div style="color:#666;text-align:center;padding:8px;">+${status.queue.length - 10} more</div>`;
     }
 
+    // Add click handler to open profile
+    queueListEl.querySelectorAll('.queue-item-info').forEach(info => {
+      info.addEventListener('click', () => {
+        const url = info.dataset.url;
+        if (url) {
+          chrome.tabs.create({ url });
+        }
+      });
+    });
+
     // Add remove button handlers
     queueListEl.querySelectorAll('.queue-item-remove').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent triggering the info click
         const id = btn.dataset.id;
         chrome.runtime.sendMessage({ action: 'removeFromQueue', id }, () => {
           updateUI();
