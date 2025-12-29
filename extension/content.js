@@ -5,7 +5,7 @@
 const processedProfiles = new Set();
 
 function extractProfileInfo(card) {
-  // Get profile link using data-view-name attribute
+  // Get profile link using data-view-name attribute (search results)
   const linkEl = card.querySelector('a[data-view-name="search-result-lockup-title"]');
   if (!linkEl) return null;
 
@@ -26,6 +26,23 @@ function extractProfileInfo(card) {
       break;
     }
   }
+
+  return { profileUrl, name, headline };
+}
+
+function extractCompanyProfileInfo(card) {
+  // Get profile link from company people cards
+  const linkEl = card.querySelector('.artdeco-entity-lockup__title a[href*="/in/"]');
+  if (!linkEl) return null;
+
+  const profileUrl = linkEl.href.split('?')[0]; // Remove query params
+
+  // Get name from the link text
+  const name = linkEl.textContent.trim() || 'Unknown';
+
+  // Get headline from subtitle
+  const subtitleEl = card.querySelector('.artdeco-entity-lockup__subtitle');
+  const headline = subtitleEl?.textContent.trim() || '';
 
   return { profileUrl, name, headline };
 }
@@ -111,12 +128,11 @@ function setButtonState(button, state) {
 }
 
 function injectButtons() {
-  // Find all search result cards
-  const cards = document.querySelectorAll('[data-view-name="people-search-result"]');
+  // Handle search result cards
+  const searchCards = document.querySelectorAll('[data-view-name="people-search-result"]');
+  console.log('LinkedIn Auto-Connect: Found', searchCards.length, 'search cards');
 
-  console.log('LinkedIn Auto-Connect: Found', cards.length, 'cards');
-
-  cards.forEach(card => {
+  searchCards.forEach(card => {
     // Skip if already has our button
     if (card.querySelector('.queue-connect-btn')) return;
 
@@ -172,6 +188,41 @@ function injectButtons() {
       button.style.marginLeft = '8px';
       actionBtn.parentElement.appendChild(button);
     }
+
+    console.log('LinkedIn Auto-Connect: Added button for:', profileInfo.name);
+  });
+
+  // Handle company people cards
+  const companyCards = document.querySelectorAll('.org-people-profile-card__profile-card-spacing');
+  console.log('LinkedIn Auto-Connect: Found', companyCards.length, 'company cards');
+
+  companyCards.forEach(card => {
+    // Skip if already has our button
+    if (card.querySelector('.queue-connect-btn')) return;
+
+    const profileInfo = extractCompanyProfileInfo(card);
+    if (!profileInfo) {
+      console.log('LinkedIn Auto-Connect: Could not extract company profile info');
+      return;
+    }
+
+    if (processedProfiles.has(profileInfo.profileUrl)) return;
+
+    // Find the footer with action button
+    const footer = card.querySelector('footer');
+    if (!footer) {
+      console.log('LinkedIn Auto-Connect: No footer found for:', profileInfo.name);
+      return;
+    }
+
+    processedProfiles.add(profileInfo.profileUrl);
+
+    const button = createQueueButton(profileInfo);
+    button.classList.add('full-width');
+    button.style.marginBottom = '8px';
+
+    // Insert before the existing button in footer
+    footer.insertBefore(button, footer.firstChild);
 
     console.log('LinkedIn Auto-Connect: Added button for:', profileInfo.name);
   });

@@ -15,7 +15,6 @@
   min-width: 80px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   position: relative;
-  z-index: 10;
   pointer-events: auto;
 }
 
@@ -43,4 +42,9 @@
 
 .queue-connect-btn.sent:hover {
   background-color: #666;
+}
+
+.queue-connect-btn.full-width {
+  width: 100%;
+  margin-right: 0;
 }
