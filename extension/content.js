@@ -90,11 +90,14 @@ function injectButtons() {
 
     if (processedProfiles.has(profileInfo.profileUrl)) return;
 
-    // Find the Connect button by aria-label (most reliable)
-    const connectBtn = card.querySelector('a[aria-label*="connect" i], button[aria-label*="connect" i]');
+    // Find the Connect or Follow button by aria-label (most reliable)
+    const actionBtn = card.querySelector(
+      'a[aria-label*="connect" i], button[aria-label*="connect" i], ' +
+      'a[aria-label*="follow" i], button[aria-label*="follow" i]'
+    );
 
-    if (!connectBtn) {
-      console.log('LinkedIn Auto-Connect: No connect button found for:', profileInfo.name);
+    if (!actionBtn) {
+      console.log('LinkedIn Auto-Connect: No connect/follow button found for:', profileInfo.name);
       return;
     }
 
@@ -107,9 +110,9 @@ function injectButtons() {
     wrapper.style.cssText = 'display: inline-block; margin-right: 8px;';
     wrapper.appendChild(button);
 
-    // Insert before the connect button's container
-    const connectContainer = connectBtn.closest('[data-view-name]') || connectBtn.parentElement;
-    connectContainer.parentElement.insertBefore(wrapper, connectContainer);
+    // Insert before the action button's container
+    const actionContainer = actionBtn.closest('[data-view-name]') || actionBtn.parentElement;
+    actionContainer.parentElement.insertBefore(wrapper, actionContainer);
 
     console.log('LinkedIn Auto-Connect: Added button for:', profileInfo.name);
   });
