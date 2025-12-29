@@ -1,0 +1,48 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+dist/
+build/
+.cache/
+coverage/
+*.local
+.env
+.env.*
+.DS_Store
+*.pem
+*.p12
+*.crt
+*.key
+
+# VSCode
+.vscode/
+
+# Logs
+logs/
+*.log
+
+# OS junk
+Thumbs.db
+desktop.ini
+
+# Mac junk
+.DS_Store
+
+# Snyk
+.snyk
+
+# Output of npm pack
+*.tgz
+
+# next.js
+.next/
+
+# Byebug command history
+.byebug_history
+
+# TypeScript cache
+*.tsbuildinfo
+
