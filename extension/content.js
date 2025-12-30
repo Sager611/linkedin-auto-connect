@@ -1,263 +1,139 @@
 // LinkedIn Auto-Connect Content Script
-// Injects "Queue Connect" buttons on search results
+// Shows floating "+ Queue" button on LinkedIn profile links
 
-// Track which profiles already have buttons
-const processedProfiles = new Set();
+// Create floating button
+const floatBtn = document.createElement('div');
+floatBtn.className = 'queue-float-btn';
+floatBtn.innerHTML = '<span class="queue-float-btn-icon">+</span><span class="queue-float-btn-text">Queue</span>';
+document.body.appendChild(floatBtn);
 
-function extractProfileInfo(card) {
-  // Get profile link using data-view-name attribute (search results)
-  const linkEl = card.querySelector('a[data-view-name="search-result-lockup-title"]');
-  if (!linkEl) return null;
+let currentProfileLink = null;
+let currentProfileInfo = null;
+let hideTimeout = null;
 
-  const profileUrl = linkEl.href.split('?')[0]; // Remove query params
-
-  // Get name from the link text
-  const name = linkEl.textContent.trim() || 'Unknown';
-
-  // Get headline - it's in a paragraph after the name section
-  // Look for the paragraph containing job title info
-  const paragraphs = card.querySelectorAll('p');
-  let headline = '';
-  for (const p of paragraphs) {
-    const text = p.textContent.trim();
-    // Skip the name paragraph and connection degree indicators
-    if (text && !text.includes('1st') && !text.includes('2nd') && !text.includes('3rd') && text !== name) {
-      headline = text;
-      break;
-    }
+function updateFloatButtonState(status) {
+  floatBtn.classList.remove('queued', 'sent');
+  if (status === 'completed') {
+    floatBtn.innerHTML = '<span class="queue-float-btn-icon">✓</span><span class="queue-float-btn-text">Sent</span>';
+    floatBtn.classList.add('sent');
+  } else if (status === 'pending') {
+    floatBtn.innerHTML = '<span class="queue-float-btn-icon">✓</span><span class="queue-float-btn-text">Queued</span>';
+    floatBtn.classList.add('queued');
+  } else {
+    floatBtn.innerHTML = '<span class="queue-float-btn-icon">+</span><span class="queue-float-btn-text">Queue</span>';
   }
-
-  return { profileUrl, name, headline };
 }
 
-function extractCompanyProfileInfo(card) {
-  // Get profile link from company people cards
-  const linkEl = card.querySelector('.artdeco-entity-lockup__title a[href*="/in/"]');
-  if (!linkEl) return null;
+function showFloatButton(link, rect) {
+  const profileUrl = link.href.split('?')[0];
 
-  const profileUrl = linkEl.href.split('?')[0]; // Remove query params
+  // Skip if it's the same link
+  if (currentProfileLink === link) return;
 
-  // Get name from the link text
-  const name = linkEl.textContent.trim() || 'Unknown';
+  currentProfileLink = link;
+  currentProfileInfo = {
+    profileUrl,
+    name: link.textContent.trim() || 'Unknown',
+    headline: ''
+  };
 
-  // Get headline from subtitle
-  const subtitleEl = card.querySelector('.artdeco-entity-lockup__subtitle');
-  const headline = subtitleEl?.textContent.trim() || '';
+  // Position button at top-right of the link
+  floatBtn.style.top = (rect.top + window.scrollY - 8) + 'px';
+  floatBtn.style.left = (rect.right + window.scrollX - 8) + 'px';
 
-  return { profileUrl, name, headline };
-}
-
-function createQueueButton(profileInfo) {
-  const button = document.createElement('button');
-  button.className = 'queue-connect-btn';
-  button.textContent = '+ Queue'; // Default state
-  button.dataset.profileUrl = profileInfo.profileUrl;
-
-  // Check if already in queue
+  // Check queue status
   chrome.runtime.sendMessage(
-    { action: 'isInQueue', profileUrl: profileInfo.profileUrl },
+    { action: 'isInQueue', profileUrl },
     (response) => {
-      if (response?.status === 'completed') {
-        setButtonState(button, 'sent');
-      } else if (response?.inQueue) {
-        setButtonState(button, 'queued');
-      } else {
-        setButtonState(button, 'add');
-      }
+      updateFloatButtonState(response?.status);
     }
   );
 
-  button.addEventListener('click', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const isQueued = button.classList.contains('queued');
-    button.disabled = true;
-
-    if (isQueued) {
-      // Remove from queue
-      button.textContent = 'Removing...';
-      chrome.runtime.sendMessage(
-        { action: 'removeByUrl', profileUrl: profileInfo.profileUrl },
-        (response) => {
-          if (response?.success) {
-            setButtonState(button, 'add');
-          }
-          button.disabled = false;
-        }
-      );
-    } else {
-      // Add to queue
-      button.textContent = 'Adding...';
-      chrome.runtime.sendMessage(
-        { action: 'addToQueue', profile: profileInfo },
-        (response) => {
-          if (response?.success) {
-            setButtonState(button, 'queued');
-          } else if (response?.error === 'Already in queue') {
-            setButtonState(button, 'queued');
-          } else {
-            button.textContent = response?.error || 'Error';
-          }
-          button.disabled = false;
-        }
-      );
-    }
-  });
-
-  return button;
+  floatBtn.classList.add('visible');
 }
 
-function setButtonState(button, state) {
-  button.classList.remove('queued', 'sent');
-  if (state === 'sent') {
-    button.textContent = '✓ Sent';
-    button.title = 'Connection request sent';
-    button.classList.add('sent');
-    button.disabled = true;
-  } else if (state === 'queued') {
-    button.textContent = '✓ Queued';
-    button.title = 'Click to remove from queue';
-    button.classList.add('queued');
-    button.disabled = false;
-  } else {
-    button.textContent = '+ Queue';
-    button.title = 'Add to auto-connect queue';
-    button.disabled = false;
+function hideFloatButton() {
+  hideTimeout = setTimeout(() => {
+    floatBtn.classList.remove('visible');
+    currentProfileLink = null;
+    currentProfileInfo = null;
+  }, 200);
+}
+
+// Handle mouse movement to detect profile links
+document.addEventListener('mousemove', (e) => {
+  // Check if mouse is over the float button itself
+  const btnRect = floatBtn.getBoundingClientRect();
+  if (e.clientX >= btnRect.left && e.clientX <= btnRect.right &&
+      e.clientY >= btnRect.top && e.clientY <= btnRect.bottom) {
+    clearTimeout(hideTimeout);
+    return;
   }
-}
 
-function injectButtons() {
-  // Handle search result cards
-  const searchCards = document.querySelectorAll('[data-view-name="people-search-result"]');
-  console.log('LinkedIn Auto-Connect: Found', searchCards.length, 'search cards');
+  // Find profile link under cursor
+  const element = document.elementFromPoint(e.clientX, e.clientY);
+  if (!element) return;
 
-  searchCards.forEach(card => {
-    // Skip if already has our button
-    if (card.querySelector('.queue-connect-btn')) return;
+  // Check if element or parent is a profile link
+  const link = element.closest('a[href*="linkedin.com/in/"]');
 
-    const profileInfo = extractProfileInfo(card);
-    if (!profileInfo) {
-      console.log('LinkedIn Auto-Connect: Could not extract profile info');
-      return;
-    }
-
-    if (processedProfiles.has(profileInfo.profileUrl)) return;
-
-    // Find the action button area (Connect, Follow, or Message)
-    const actionBtn = card.querySelector(
-      'a[aria-label*="connect" i], button[aria-label*="connect" i], ' +
-      'a[aria-label*="follow" i], button[aria-label*="follow" i], ' +
-      'a[aria-label="Message" i], button[aria-label="Message" i]'
+  if (link && link.href.match(/linkedin\.com\/in\/[^\/\?]+/)) {
+    clearTimeout(hideTimeout);
+    const rect = link.getBoundingClientRect();
+    showFloatButton(link, rect);
+  } else if (currentProfileLink) {
+    // Check if we're still close to the current link
+    const rect = currentProfileLink.getBoundingClientRect();
+    const distance = Math.sqrt(
+      Math.pow(e.clientX - (rect.left + rect.width/2), 2) +
+      Math.pow(e.clientY - (rect.top + rect.height/2), 2)
     );
-
-    if (!actionBtn) {
-      console.log('LinkedIn Auto-Connect: No action button found for:', profileInfo.name);
-      return;
+    if (distance > 100) {
+      hideFloatButton();
     }
-
-    processedProfiles.add(profileInfo.profileUrl);
-
-    const button = createQueueButton(profileInfo);
-
-    // Check if this is a Message-only card (no Connect/Follow)
-    const isMessageOnly = actionBtn.getAttribute('aria-label') === 'Message';
-    if (isMessageOnly) {
-      button.style.marginTop = '32px';
-    }
-
-    // Find the relationship-building-button container which holds all action buttons
-    const relationshipContainer = card.querySelector('[data-view-name="relationship-building-button"]');
-
-    if (relationshipContainer) {
-      // Create wrapper and insert at the beginning of the container
-      const wrapper = document.createElement('div');
-      wrapper.style.cssText = 'display: inline-flex; align-items: center; margin-right: 8px;';
-      wrapper.setAttribute('data-view-name', 'queue-connect-action');
-      wrapper.appendChild(button);
-
-      // Insert as first child of the relationship container's inner div
-      const innerContainer = relationshipContainer.firstElementChild;
-      if (innerContainer) {
-        innerContainer.insertBefore(wrapper, innerContainer.firstChild);
-      } else {
-        relationshipContainer.insertBefore(wrapper, relationshipContainer.firstChild);
-      }
-    } else {
-      // Fallback: insert right after the action button
-      button.style.marginLeft = '8px';
-      actionBtn.parentElement.appendChild(button);
-    }
-
-    console.log('LinkedIn Auto-Connect: Added button for:', profileInfo.name);
-  });
-
-  // Handle company people cards
-  const companyCards = document.querySelectorAll('.org-people-profile-card__profile-card-spacing');
-  console.log('LinkedIn Auto-Connect: Found', companyCards.length, 'company cards');
-
-  companyCards.forEach(card => {
-    // Skip if already has our button
-    if (card.querySelector('.queue-connect-btn')) return;
-
-    const profileInfo = extractCompanyProfileInfo(card);
-    if (!profileInfo) {
-      console.log('LinkedIn Auto-Connect: Could not extract company profile info');
-      return;
-    }
-
-    if (processedProfiles.has(profileInfo.profileUrl)) return;
-
-    // Find the footer with action button
-    const footer = card.querySelector('footer');
-    if (!footer) {
-      console.log('LinkedIn Auto-Connect: No footer found for:', profileInfo.name);
-      return;
-    }
-
-    processedProfiles.add(profileInfo.profileUrl);
-
-    const button = createQueueButton(profileInfo);
-    button.classList.add('full-width');
-    button.style.marginBottom = '8px';
-
-    // Check if there's an entry-point wrapper div
-    const entryPoint = footer.querySelector('.entry-point');
-    if (entryPoint) {
-      // Insert before the entry-point div
-      footer.insertBefore(button, entryPoint);
-    } else {
-      // Insert at the beginning of footer
-      footer.insertBefore(button, footer.firstChild);
-    }
-
-    console.log('LinkedIn Auto-Connect: Added button for:', profileInfo.name);
-  });
-}
-
-// Run on page load with retries (content loads async)
-function initWithRetry(attempts = 0) {
-  injectButtons();
-
-  // Retry a few times as content loads asynchronously
-  if (attempts < 5) {
-    setTimeout(() => initWithRetry(attempts + 1), 1000);
   }
-}
-
-// Wait for initial page load
-setTimeout(initWithRetry, 1000);
-
-// Re-run when new results load (infinite scroll)
-let debounceTimer = null;
-const observer = new MutationObserver(() => {
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(injectButtons, 500);
 });
 
-observer.observe(document.body, {
-  childList: true,
-  subtree: true
+// Keep button visible when hovering over it
+floatBtn.addEventListener('mouseenter', () => {
+  clearTimeout(hideTimeout);
+});
+
+floatBtn.addEventListener('mouseleave', () => {
+  hideFloatButton();
+});
+
+// Handle click on float button
+floatBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  if (!currentProfileInfo) return;
+
+  const isQueued = floatBtn.classList.contains('queued');
+  const isSent = floatBtn.classList.contains('sent');
+
+  if (isSent) return;
+
+  if (isQueued) {
+    chrome.runtime.sendMessage(
+      { action: 'removeByUrl', profileUrl: currentProfileInfo.profileUrl },
+      (response) => {
+        if (response?.success) {
+          updateFloatButtonState(null);
+        }
+      }
+    );
+  } else {
+    chrome.runtime.sendMessage(
+      { action: 'addToQueue', profile: currentProfileInfo },
+      (response) => {
+        if (response?.success) {
+          updateFloatButtonState('pending');
+        }
+      }
+    );
+  }
 });
 
 console.log('LinkedIn Auto-Connect: Content script loaded');

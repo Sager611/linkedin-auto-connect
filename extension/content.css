@@ -1,50 +1,71 @@
-.queue-connect-btn {
+/* Floating queue button for profile links */
+.queue-float-btn {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
   background-color: #0a66c2;
   color: white;
-  border: none;
-  border-radius: 16px;
-  padding: 6px 16px;
-  font-size: 14px;
-  font-weight: 600;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   cursor: pointer;
-  margin-right: 8px;
-  transition: background-color 0.2s;
-  display: inline-flex;
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 80px;
+  z-index: 9999;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.15s, transform 0.15s, width 0.2s, border-radius 0.2s;
+  pointer-events: none;
+  overflow: hidden;
+  white-space: nowrap;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  position: relative;
+}
+
+.queue-float-btn.visible {
+  opacity: 1;
+  transform: scale(1);
   pointer-events: auto;
 }
 
-.queue-connect-btn:hover {
+.queue-float-btn:hover {
+  width: 80px;
+  border-radius: 12px;
   background-color: #004182;
 }
 
-.queue-connect-btn:disabled {
-  background-color: #86c5ff;
-  cursor: not-allowed;
-}
-
-.queue-connect-btn.queued {
+.queue-float-btn.queued {
   background-color: #057642;
 }
 
-.queue-connect-btn.queued:hover {
-  background-color: #057642;
+.queue-float-btn.queued:hover {
+  background-color: #045e35;
 }
 
-.queue-connect-btn.sent {
+.queue-float-btn.sent {
   background-color: #666;
   cursor: default;
 }
 
-.queue-connect-btn.sent:hover {
+.queue-float-btn.sent:hover {
   background-color: #666;
+  width: 60px;
 }
 
-.queue-connect-btn.full-width {
-  width: 100%;
-  margin-right: 0;
+.queue-float-btn-text {
+  display: none;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 2px;
 }
+
+.queue-float-btn:hover .queue-float-btn-text {
+  display: inline;
+}
+
+.queue-float-btn:hover .queue-float-btn-icon {
+  font-size: 14px;
+}
+
