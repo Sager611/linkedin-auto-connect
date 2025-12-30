@@ -6,6 +6,12 @@ async function getStatus() {
   });
 }
 
+async function getCurrentUser() {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'getUser' }, resolve);
+  });
+}
+
 async function getSettings() {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ action: 'getSettings' }, resolve);
@@ -30,6 +36,7 @@ async function saveSettings() {
 
 async function updateUI() {
   const status = await getStatus();
+  const userInfo = await getCurrentUser();
 
   const serverStatusEl = document.getElementById('server-status');
   const queueCountEl = document.getElementById('queue-count');
@@ -37,6 +44,7 @@ async function updateUI() {
   const queueListEl = document.getElementById('queue-list');
   const toggleBtn = document.getElementById('toggle-btn');
   const connectNowBtn = document.getElementById('connect-now-btn');
+  const currentUserEl = document.getElementById('current-user');
 
   if (!status) {
     serverStatusEl.textContent = 'Error';
@@ -47,6 +55,12 @@ async function updateUI() {
   serverStatusEl.textContent = 'Ready';
   serverStatusEl.className = 'status-value active';
   toggleBtn.disabled = false;
+
+  // Show current user
+  if (currentUserEl) {
+    currentUserEl.textContent = userInfo?.user || 'Not detected';
+    currentUserEl.title = userInfo?.user ? `Queue for: ${userInfo.user}` : 'Visit LinkedIn to detect user';
+  }
 
   queueCountEl.textContent = `${status.queue.length} total (${status.pending} pending)`;
 

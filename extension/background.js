@@ -5,6 +5,9 @@ const ALARM_NAME = 'processQueue';
 const DEFAULT_MIN_DELAY = 1; // 1 minute minimum
 const DEFAULT_MAX_DELAY = 3; // 3 minutes maximum
 
+// Current LinkedIn user (set from content script or popup)
+let currentLinkedInUser = null;
+
 // Get settings from storage
 async function getSettings() {
   const { settings = { minDelay: DEFAULT_MIN_DELAY, maxDelay: DEFAULT_MAX_DELAY } } =
@@ -17,15 +20,33 @@ async function saveSettings(newSettings) {
   await chrome.storage.local.set({ settings: newSettings });
 }
 
-// Get queue from storage
-async function getQueue() {
-  const { queue = [] } = await chrome.storage.local.get('queue');
-  return queue;
+// Get queue from storage for current user
+async function getQueue(user = currentLinkedInUser) {
+  if (!user) {
+    // Fallback to legacy queue if no user
+    const { queue = [] } = await chrome.storage.local.get('queue');
+    return queue;
+  }
+  const { queues = {} } = await chrome.storage.local.get('queues');
+  return queues[user] || [];
 }
 
-// Save queue to storage
-async function saveQueue(queue) {
-  await chrome.storage.local.set({ queue });
+// Save queue to storage for current user
+async function saveQueue(queue, user = currentLinkedInUser) {
+  if (!user) {
+    // Fallback to legacy queue if no user
+    await chrome.storage.local.set({ queue });
+    return;
+  }
+  const { queues = {} } = await chrome.storage.local.get('queues');
+  queues[user] = queue;
+  await chrome.storage.local.set({ queues });
+}
+
+// Set current user
+function setCurrentUser(user) {
+  currentLinkedInUser = user;
+  console.log('LinkedIn Auto-Connect: Current user set to:', user);
 }
 
 // Get processing state
@@ -505,6 +526,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const filtered = currentQueue.filter(item => item.status !== 'pending');
         await saveQueue(filtered);
         sendResponse({ success: true });
+        break;
+
+      case 'setUser':
+        setCurrentUser(request.user);
+        sendResponse({ success: true, user: request.user });
+        break;
+
+      case 'getUser':
+        sendResponse({ user: currentLinkedInUser });
         break;
 
       default:
