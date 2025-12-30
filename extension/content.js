@@ -221,8 +221,15 @@ function injectButtons() {
     button.classList.add('full-width');
     button.style.marginBottom = '8px';
 
-    // Insert before the existing button in footer
-    footer.insertBefore(button, footer.firstChild);
+    // Check if there's an entry-point wrapper div
+    const entryPoint = footer.querySelector('.entry-point');
+    if (entryPoint) {
+      // Insert before the entry-point div
+      footer.insertBefore(button, entryPoint);
+    } else {
+      // Insert at the beginning of footer
+      footer.insertBefore(button, footer.firstChild);
+    }
 
     console.log('LinkedIn Auto-Connect: Added button for:', profileInfo.name);
   });
