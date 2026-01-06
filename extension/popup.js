@@ -293,6 +293,16 @@ async function updateUI() {
           chrome.tabs.create({ url });
         }
       });
+      // Middle-click to open in new tab
+      info.addEventListener('auxclick', (e) => {
+        if (e.button === 1) {
+          e.preventDefault();
+          const url = info.dataset.url;
+          if (url) {
+            chrome.tabs.create({ url, active: false });
+          }
+        }
+      });
     });
 
     // Add retry button handlers
