@@ -297,6 +297,30 @@
       font-size: 12px;
       margin-left: 4px;
     }
+    .queue-filters {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .queue-filters-label {
+      color: #666;
+      font-size: 12px;
+    }
+    .queue-filter-select {
+      padding: 4px 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      color: #333;
+      flex: 1;
+    }
+    .queue-filter-select:focus {
+      outline: none;
+      border-color: #0a66c2;
+    }
   </style>
 </head>
 <body>
@@ -353,6 +377,16 @@
       <div class="message-tabs" id="message-tabs"></div>
     </div>
 
+    <div class="queue-filters">
+      <span class="queue-filters-label">Filter:</span>
+      <select id="queue-filter" class="queue-filter-select">
+        <option value="all">All</option>
+        <option value="pending">Pending</option>
+        <option value="completed">Completed</option>
+        <option value="connected">Connected</option>
+        <option value="failed">Failed</option>
+      </select>
+    </div>
     <div class="queue-list" id="queue-list"></div>
 
     <div class="buttons">

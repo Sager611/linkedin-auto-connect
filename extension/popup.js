@@ -38,6 +38,7 @@ async function saveSettings() {
 
 let messageTemplates = [{ name: '1', content: '' }];
 let activeTemplateIndex = 0;
+let currentFilter = 'all';
 
 async function loadMessageTemplates() {
   const data = await chrome.storage.local.get(['messageTemplates', 'activeTemplateIndex']);
@@ -249,10 +250,21 @@ async function updateUI() {
     return match ? match[1].toLowerCase() : null;
   };
 
+  // Apply filter to queue items
+  const filteredQueue = status.queue.filter(item => {
+    if (currentFilter === 'all') return true;
+    const username = getUsername(item.profileUrl);
+    const isAccepted = username && acceptedUsernames.has(username);
+    const effectiveStatus = isAccepted ? 'connected' : item.status;
+    return effectiveStatus === currentFilter;
+  });
+
   if (status.queue.length === 0) {
     queueListEl.innerHTML = '<div style="color:#666;text-align:center;padding:20px;">Queue is empty</div>';
+  } else if (filteredQueue.length === 0) {
+    queueListEl.innerHTML = `<div style="color:#666;text-align:center;padding:20px;">No ${currentFilter} items</div>`;
   } else {
-    queueListEl.innerHTML = status.queue
+    queueListEl.innerHTML = filteredQueue
       .slice()
       .reverse()
       .map(item => {
@@ -397,6 +409,12 @@ document.getElementById('check-now-btn').addEventListener('click', () => {
 
 // Save message template when changed
 document.getElementById('message-template').addEventListener('input', onTemplateInput);
+
+// Queue filter dropdown
+document.getElementById('queue-filter').addEventListener('change', (e) => {
+  currentFilter = e.target.value;
+  updateUI();
+});
 
 // Initialize
 loadSettings();
