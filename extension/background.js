@@ -2,8 +2,10 @@
 // Manages the connection queue and schedules auto-connect
 
 const ALARM_NAME = 'processQueue';
+const CHECK_CONNECTIONS_ALARM = 'checkConnections';
 const DEFAULT_MIN_DELAY = 1; // 1 minute minimum
 const DEFAULT_MAX_DELAY = 3; // 3 minutes maximum
+const DEFAULT_CHECK_INTERVAL = 5; // 5 minutes
 
 // Current LinkedIn user (set from content script or popup)
 let currentLinkedInUser = null;
@@ -228,6 +230,201 @@ async function processItem(nextItem) {
   }
 }
 
+// Function to parse connections from the LinkedIn connections page
+function parseConnectionsPage() {
+  const connections = [];
+
+  // New LinkedIn structure uses data-view-name="connections-profile" for profile links
+  const profileLinks = document.querySelectorAll('a[data-view-name="connections-profile"]');
+
+  const seenUrls = new Set();
+  profileLinks.forEach(link => {
+    const href = link.href;
+    if (href && href.includes('/in/')) {
+      // Normalize the URL (remove query params and trailing slash)
+      const url = new URL(href);
+      const profileUrl = url.origin + url.pathname.replace(/\/$/, '');
+
+      // Avoid duplicates (each connection has multiple links)
+      if (!seenUrls.has(profileUrl)) {
+        seenUrls.add(profileUrl);
+        connections.push(profileUrl);
+      }
+    }
+  });
+
+  return connections;
+}
+
+// Check connections page and update stored connections
+async function checkConnections() {
+  console.log('LinkedIn Auto-Connect: Checking connections...');
+
+  try {
+    const tab = await chrome.tabs.create({
+      url: 'https://www.linkedin.com/mynetwork/invite-connect/connections/',
+      active: false
+    });
+
+    // Wait for page to load
+    return new Promise((resolve) => {
+      chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+        if (tabId === tab.id && info.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(listener);
+
+          // Wait for content to load
+          setTimeout(async () => {
+            try {
+              const results = await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: parseConnectionsPage
+              });
+
+              const connectionUrls = results[0]?.result || [];
+
+              // Extract username from LinkedIn URL
+              const getUsername = (url) => {
+                if (!url) return null;
+                const match = url.match(/\/in\/([^/?#]+)/);
+                return match ? match[1].toLowerCase() : null;
+              };
+
+              // Convert to usernames only
+              const connectedUsernames = connectionUrls.map(getUsername).filter(Boolean);
+              console.log('LinkedIn Auto-Connect: Found', connectedUsernames.length, 'connections:', connectedUsernames);
+
+              // Store usernames
+              await chrome.storage.local.set({
+                acceptedConnections: connectedUsernames,
+                lastConnectionCheck: new Date().toISOString()
+              });
+
+              // Build a set for quick lookup
+              const connectedUsernamesSet = new Set(connectedUsernames);
+
+              const { queues = {} } = await chrome.storage.local.get('queues');
+              const { queue: legacyQueue = [] } = await chrome.storage.local.get('queue');
+
+              // Update all user queues
+              let anyUpdated = false;
+              for (const user of Object.keys(queues)) {
+                let updated = false;
+                for (const item of queues[user]) {
+                  const username = getUsername(item.profileUrl);
+                  if (username && connectedUsernamesSet.has(username) && item.status !== 'connected') {
+                    item.status = 'connected';
+                    item.connectedAt = new Date().toISOString();
+                    updated = true;
+                    console.log('LinkedIn Auto-Connect: Marked as connected:', item.name, '(user:', user, ')');
+                  }
+                }
+                if (updated) anyUpdated = true;
+              }
+
+              // Also update legacy queue
+              for (const item of legacyQueue) {
+                const username = getUsername(item.profileUrl);
+                if (username && connectedUsernamesSet.has(username) && item.status !== 'connected') {
+                  item.status = 'connected';
+                  item.connectedAt = new Date().toISOString();
+                  anyUpdated = true;
+                  console.log('LinkedIn Auto-Connect: Marked as connected:', item.name, '(legacy queue)');
+                }
+              }
+
+              if (anyUpdated) {
+                await chrome.storage.local.set({ queues, queue: legacyQueue });
+              }
+
+              // Close the tab
+              chrome.tabs.remove(tab.id);
+              resolve({ success: true, count: connections.length });
+            } catch (err) {
+              console.error('LinkedIn Auto-Connect: Error parsing connections:', err);
+              chrome.tabs.remove(tab.id);
+              resolve({ success: false, error: err.message });
+            }
+          }, 3000);
+        }
+      });
+    });
+  } catch (err) {
+    console.error('LinkedIn Auto-Connect: Error checking connections:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+// Schedule connection check
+async function scheduleConnectionCheck() {
+  const settings = await getSettings();
+  const checkInterval = settings.checkInterval || DEFAULT_CHECK_INTERVAL;
+
+  chrome.alarms.create(CHECK_CONNECTIONS_ALARM, { periodInMinutes: checkInterval });
+  console.log('LinkedIn Auto-Connect: Scheduled connection check every', checkInterval, 'minutes');
+}
+
+// This function runs in the context of the LinkedIn profile page to send a message
+function clickMessageButton(message) {
+  return new Promise((resolve) => {
+    try {
+      console.log('LinkedIn Auto-Connect: Looking for Message button...');
+
+      const allButtons = document.querySelectorAll('button, a');
+      let messageBtn = null;
+
+      for (const btn of allButtons) {
+        const ariaLabel = (btn.getAttribute('aria-label') || '').toLowerCase();
+        if (ariaLabel === 'message' || ariaLabel.startsWith('message ')) {
+          messageBtn = btn;
+          break;
+        }
+      }
+
+      if (!messageBtn) {
+        console.log('LinkedIn Auto-Connect: Message button not found - may not be connected');
+        resolve({ success: false, error: 'Message button not found - you may not be connected to this person' });
+        return;
+      }
+
+      console.log('LinkedIn Auto-Connect: Clicking message button');
+      messageBtn.click();
+
+      // Wait for message modal to open
+      setTimeout(() => {
+        // Find the message input area
+        const messageInput = document.querySelector('.msg-form__contenteditable, div[contenteditable="true"][role="textbox"]');
+
+        if (!messageInput) {
+          console.log('LinkedIn Auto-Connect: Message input not found');
+          resolve({ success: false, error: 'Message input not found' });
+          return;
+        }
+
+        console.log('LinkedIn Auto-Connect: Pasting message');
+
+        // Clear existing content and paste the message
+        messageInput.innerHTML = '';
+        messageInput.focus();
+
+        // Insert the message text
+        const p = document.createElement('p');
+        p.textContent = message;
+        messageInput.appendChild(p);
+
+        // Trigger input event to enable send button
+        messageInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+        console.log('LinkedIn Auto-Connect: Message pasted, ready to send');
+        resolve({ success: true });
+      }, 1500);
+
+    } catch (err) {
+      console.error('LinkedIn Auto-Connect: Error:', err);
+      resolve({ success: false, error: err.message });
+    }
+  });
+}
+
 // This function runs in the context of the LinkedIn profile page
 function clickConnectButton() {
   return new Promise((resolve) => {
@@ -433,8 +630,13 @@ function clickConnectButton() {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_NAME) {
     processNext();
+  } else if (alarm.name === CHECK_CONNECTIONS_ALARM) {
+    checkConnections();
   }
 });
+
+// Start connection check alarm on startup
+scheduleConnectionCheck();
 
 // Listen for messages from popup and content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -464,6 +666,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       case 'setSettings':
         await saveSettings(request.settings);
+        // Reschedule connection check with new interval
+        await scheduleConnectionCheck();
         sendResponse({ success: true });
         break;
 
@@ -535,6 +739,55 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       case 'getUser':
         sendResponse({ user: currentLinkedInUser });
+        break;
+
+      case 'getAcceptedConnections':
+        const { acceptedConnections = [], lastConnectionCheck } = await chrome.storage.local.get(['acceptedConnections', 'lastConnectionCheck']);
+        sendResponse({ connections: acceptedConnections, lastCheck: lastConnectionCheck });
+        break;
+
+      case 'checkConnectionsNow':
+        const checkResult = await checkConnections();
+        // Reschedule the alarm with current settings
+        await scheduleConnectionCheck();
+        sendResponse(checkResult);
+        break;
+
+      case 'sendMessage':
+        // Open profile and send message
+        try {
+          const tab = await chrome.tabs.create({
+            url: request.profileUrl,
+            active: true // Open in foreground so user can see and send
+          });
+
+          // Wait for page to load, then inject the message script
+          chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+            if (tabId === tab.id && info.status === 'complete') {
+              chrome.tabs.onUpdated.removeListener(listener);
+
+              // Wait for page to fully render
+              setTimeout(async () => {
+                try {
+                  const results = await chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    func: clickMessageButton,
+                    args: [request.message]
+                  });
+
+                  const result = results[0]?.result;
+                  sendResponse(result);
+                } catch (err) {
+                  console.error('Script execution error:', err);
+                  sendResponse({ success: false, error: err.message });
+                }
+              }, 2000);
+            }
+          });
+        } catch (err) {
+          console.error('Failed to open tab:', err);
+          sendResponse({ success: false, error: err.message });
+        }
         break;
 
       default:

@@ -98,6 +98,10 @@
     .queue-item-status.completed {
       color: #057642;
     }
+    .queue-item-status.connected {
+      color: #057642;
+      font-weight: 600;
+    }
     .queue-item-status.failed {
       color: #b24020;
     }
@@ -192,6 +196,107 @@
       background: #ccc;
       cursor: not-allowed;
     }
+    .message-template {
+      padding: 12px;
+      background: #f3f6f8;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    .message-template-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    .message-template textarea {
+      width: 100%;
+      min-height: 80px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: inherit;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+    .message-template textarea:focus {
+      outline: none;
+      border-color: #0a66c2;
+    }
+    .queue-item-message {
+      background: none;
+      border: none;
+      color: #0a66c2;
+      cursor: pointer;
+      padding: 4px 6px;
+      font-size: 18px;
+      flex: none;
+    }
+    .queue-item-message:hover {
+      color: #004182;
+    }
+    .queue-item-message:disabled {
+      color: #ccc;
+      cursor: not-allowed;
+    }
+    .message-tabs {
+      display: flex;
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .message-tab {
+      padding: 4px 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      color: #666;
+    }
+    .message-tab:hover {
+      background: #f0f0f0;
+    }
+    .message-tab.active {
+      background: #0a66c2;
+      color: white;
+      border-color: #0a66c2;
+    }
+    .message-tab-add {
+      padding: 4px 8px;
+      font-weight: bold;
+    }
+    .message-tab-remove {
+      margin-left: 4px;
+      font-size: 10px;
+      opacity: 0.7;
+    }
+    .message-tab-remove:hover {
+      opacity: 1;
+    }
+    .btn-check-now {
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      background: #0a66c2;
+      color: white;
+      cursor: pointer;
+      font-size: 12px;
+      flex: none;
+    }
+    .btn-check-now:hover {
+      background: #004182;
+    }
+    .btn-check-now:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .queue-item.accepted {
+      background: linear-gradient(90deg, #e8f5e9 0%, transparent 100%);
+    }
+    .queue-item-accepted-badge {
+      color: #057642;
+      font-size: 12px;
+      margin-left: 4px;
+    }
   </style>
 </head>
 <body>
@@ -229,14 +334,28 @@
         <input type="number" id="max-delay" min="0.5" max="60000" step="0.5" value="3">
         <span>min</span>
       </div>
+      <div class="settings-row">
+        <label>Check accepted:</label>
+        <input type="number" id="check-interval" min="1" max="1440" step="1" value="5">
+        <span>min</span>
+        <button class="btn-check-now" id="check-now-btn" title="Check now">↻</button>
+      </div>
     </div>
 
-    <button class="btn-connect-now" id="connect-now-btn">Connect Next Now</button>
+    <div class="buttons" style="margin-bottom: 12px;">
+      <button class="btn-primary" id="toggle-btn">Start</button>
+      <button class="btn-connect-now" id="connect-now-btn" style="margin-bottom: 0;">Connect Next Now</button>
+    </div>
+
+    <div class="message-template">
+      <div class="message-template-title">Message Template</div>
+      <textarea id="message-template" placeholder="Hi {name}, I'd like to connect with you..."></textarea>
+      <div class="message-tabs" id="message-tabs"></div>
+    </div>
 
     <div class="queue-list" id="queue-list"></div>
 
     <div class="buttons">
-      <button class="btn-primary" id="toggle-btn">Start</button>
       <button class="btn-secondary" id="clear-btn">Clear Queue</button>
     </div>
   </div>
