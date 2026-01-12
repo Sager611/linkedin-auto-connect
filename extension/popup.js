@@ -271,7 +271,18 @@ async function updateUI() {
         const username = getUsername(item.profileUrl);
         const isAccepted = username && acceptedUsernames.has(username);
         const displayStatus = isAccepted ? 'connected' : item.status;
-        const statusText = isAccepted ? 'Connected' : (item.status + (item.status === 'failed' && item.error ? ': ' + escapeHtml(item.error) : ''));
+        const formatConnectedDate = (isoDate) => {
+          if (!isoDate) return 'Connected';
+          const d = new Date(isoDate);
+          const pad = n => n.toString().padStart(2, '0');
+          const day = pad(d.getDate());
+          const month = pad(d.getMonth() + 1);
+          const year = d.getFullYear().toString().slice(-2);
+          const hours = pad(d.getHours());
+          const minutes = pad(d.getMinutes());
+          return `Connected - ${year}.${month}.${day} ${hours}:${minutes}`;
+        };
+        const statusText = isAccepted ? formatConnectedDate(item.connectedAt) : (item.status + (item.status === 'failed' && item.error ? ': ' + escapeHtml(item.error) : ''));
         return `
         <div class="queue-item ${isAccepted ? 'accepted' : ''}" data-id="${item.id}">
           <button class="queue-item-message" data-id="${item.id}" data-url="${escapeHtml(item.profileUrl)}" data-name="${escapeHtml(item.name)}" title="Send message">✉</button>
