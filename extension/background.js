@@ -363,6 +363,398 @@ async function scheduleConnectionCheck() {
   console.log('LinkedIn Auto-Connect: Scheduled connection check every', checkInterval, 'minutes');
 }
 
+// Function to scrape company search results from LinkedIn
+// Runs in the context of the LinkedIn search page
+function scrapeCompanySearchResults() {
+  const results = [];
+  
+  try {
+    // Check for CAPTCHA or error states
+    const captcha = document.querySelector('.captcha-internal, #captcha-challenge');
+    if (captcha) {
+      return { error: 'CAPTCHA detected. Please solve it manually and try again.' };
+    }
+    
+    const authWall = document.querySelector('.authwall-join, .unauthenticated-join');
+    if (authWall) {
+      return { error: 'LinkedIn requires you to be logged in. Please log in and try again.' };
+    }
+    
+    const errorPage = document.querySelector('.error-container, .not-found-page');
+    if (errorPage) {
+      return { error: 'LinkedIn returned an error page. Please try again later.' };
+    }
+    
+    // Find all company result cards using the data-chameleon-result-urn attribute
+    const companyCards = document.querySelectorAll('[data-chameleon-result-urn^="urn:li:company:"]');
+    
+    console.log('LinkedIn scraper: Found', companyCards.length, 'company cards');
+    
+    companyCards.forEach((card, index) => {
+      try {
+        // Extract company ID from URN
+        const urn = card.getAttribute('data-chameleon-result-urn');
+        const companyId = urn ? urn.replace('urn:li:company:', '') : null;
+        
+        // Find company URL and name using multiple strategies
+        let companyUrl = null;
+        let finalName = null;
+        
+        // Strategy 1: Look for the name link inside t-16 span (most reliable)
+        const t16Span = card.querySelector('span.t-16, span[class*="t-16"]');
+        if (t16Span) {
+          const nameLink = t16Span.querySelector('a[href*="/company/"]');
+          if (nameLink) {
+            companyUrl = nameLink.href.split('?')[0];
+            finalName = nameLink.textContent.trim().replace(/<!---->/g, '').trim();
+          }
+        }
+        
+        // Strategy 2: Look for any company link with text (not image)
+        if (!finalName) {
+          const companyLinks = card.querySelectorAll('a[href*="/company/"]');
+          for (const link of companyLinks) {
+            const href = link.href;
+            if (href && href.includes('/company/')) {
+              if (!companyUrl) companyUrl = href.split('?')[0];
+              
+              // Skip if this link contains an image
+              if (link.querySelector('img')) continue;
+              
+              // Get direct text content, not nested elements
+              let textContent = '';
+              for (const node of link.childNodes) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                  textContent += node.textContent;
+                } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName !== 'IMG') {
+                  textContent += node.textContent;
+                }
+              }
+              textContent = textContent.trim().replace(/<!---->/g, '').trim();
+              
+              if (textContent && textContent.length > 0 && textContent.length < 200) {
+                finalName = textContent;
+                break;
+              }
+            }
+          }
+        }
+        
+        // Strategy 3: Get name from image alt attribute
+        if (!finalName) {
+          const img = card.querySelector('img[alt]');
+          if (img && img.alt && img.alt.length < 200) {
+            finalName = img.alt;
+          }
+        }
+        
+        // Strategy 4: Look for aria-label on Follow button
+        if (!finalName) {
+          const followBtn = card.querySelector('button[aria-label^="Follow "]');
+          if (followBtn) {
+            const ariaLabel = followBtn.getAttribute('aria-label');
+            finalName = ariaLabel.replace('Follow ', '').trim();
+          }
+        }
+        
+        // Get industry and location (t-14 t-black divs after the name)
+        let industry = '';
+        let followers = '';
+        
+        // Find all t-14 divs and extract info based on content
+        const allDivs = card.querySelectorAll('div');
+        for (const div of allDivs) {
+          const text = div.textContent.trim();
+          const classList = div.className || '';
+          
+          // Look for industry/location div (contains bullet point separator)
+          if (classList.includes('t-14') && classList.includes('t-black') && text.includes('•') && !industry) {
+            industry = text;
+          }
+          
+          // Look for followers count
+          if (text.match(/^\d+K?\s*followers$/i) && !followers) {
+            followers = text;
+          }
+        }
+        
+        // Get description/summary
+        let description = '';
+        const summaryEl = card.querySelector('p');
+        if (summaryEl) {
+          description = summaryEl.textContent.trim().replace(/<!---->/g, '').trim();
+        }
+        
+        console.log('LinkedIn scraper: Card', index, '- ID:', companyId, 'Name:', finalName, 'URL:', companyUrl);
+        
+        if (companyId && finalName) {
+          results.push({
+            id: companyId,
+            name: finalName,
+            url: companyUrl,
+            industry: industry,
+            details: description,
+            followers: followers
+          });
+        } else {
+          console.log('LinkedIn scraper: Skipping card', index, '- missing ID or name');
+        }
+      } catch (err) {
+        console.error('Error parsing company card:', err);
+      }
+    });
+    
+    // Check if there's a next page - try multiple selectors
+    let hasNextPage = false;
+    const nextSelectors = [
+      'button[aria-label="Next"]',
+      'button[aria-label="Forward"]',
+      '.artdeco-pagination__button--next',
+      'button.artdeco-pagination__button--next'
+    ];
+    
+    for (const selector of nextSelectors) {
+      const nextButton = document.querySelector(selector);
+      if (nextButton && !nextButton.disabled) {
+        hasNextPage = true;
+        break;
+      }
+    }
+    
+    // Also check if we found any results - if we did, assume there might be more
+    if (results.length >= 10) {
+      hasNextPage = true; // LinkedIn typically shows 10 results per page
+    }
+    
+    console.log('LinkedIn scraper: hasNextPage =', hasNextPage, 'results =', results.length);
+    
+    return {
+      results: results,
+      hasNextPage: hasNextPage,
+      totalFound: results.length
+    };
+    
+  } catch (err) {
+    console.error('LinkedIn scraper error:', err);
+    return { error: `Scraping failed: ${err.message}` };
+  }
+}
+
+// Function to scrape people search results from LinkedIn
+// Runs in the context of the LinkedIn search page
+function scrapePeopleSearchResults() {
+  const results = [];
+  
+  try {
+    // Check for CAPTCHA or error states
+    const captcha = document.querySelector('.captcha-internal, #captcha-challenge');
+    if (captcha) {
+      return { error: 'CAPTCHA detected. Please solve it manually and try again.' };
+    }
+    
+    const authWall = document.querySelector('.authwall-join, .unauthenticated-join');
+    if (authWall) {
+      return { error: 'LinkedIn requires you to be logged in. Please log in and try again.' };
+    }
+    
+    const errorPage = document.querySelector('.error-container, .not-found-page');
+    if (errorPage) {
+      return { error: 'LinkedIn returned an error page. Please try again later.' };
+    }
+    
+    // Find all people result cards using data-chameleon-result-urn for members
+    // or fall back to finding list items with profile links
+    let peopleCards = document.querySelectorAll('[data-chameleon-result-urn^="urn:li:member:"]');
+    
+    // Fallback: find by list structure
+    if (peopleCards.length === 0) {
+      peopleCards = document.querySelectorAll('li.reusable-search__result-container');
+    }
+    
+    // Another fallback: find by profile links in list items
+    if (peopleCards.length === 0) {
+      const listItems = document.querySelectorAll('ul[role="list"] > li');
+      const filtered = [];
+      listItems.forEach(li => {
+        if (li.querySelector('a[href*="/in/"]')) {
+          filtered.push(li);
+        }
+      });
+      peopleCards = filtered;
+    }
+    
+    console.log('LinkedIn scraper: Found', peopleCards.length, 'people cards');
+    
+    const seenUrls = new Set();
+    
+    peopleCards.forEach((card, index) => {
+      try {
+        // Find profile link and name
+        let profileUrl = null;
+        let name = null;
+        
+        // Strategy 1: Look for the name in span[aria-hidden="true"] inside t-16 span
+        // This is the most reliable - it's specifically the visible name text
+        const t16Span = card.querySelector('span.t-16, span[class*="t-16"]');
+        if (t16Span) {
+          const nameLink = t16Span.querySelector('a[href*="/in/"]');
+          if (nameLink) {
+            profileUrl = nameLink.href.split('?')[0];
+            
+            // Look for the aria-hidden="true" span which contains just the name
+            const ariaHiddenSpan = nameLink.querySelector('span[aria-hidden="true"]');
+            if (ariaHiddenSpan) {
+              name = ariaHiddenSpan.textContent.trim().replace(/<!---->/g, '').trim();
+            }
+          }
+        }
+        
+        // Strategy 2: Find any profile link and extract name from aria-hidden span
+        if (!profileUrl || !name) {
+          const profileLinks = card.querySelectorAll('a[href*="/in/"]');
+          for (const link of profileLinks) {
+            const href = link.href;
+            if (href && href.includes('/in/')) {
+              if (!profileUrl) profileUrl = href.split('?')[0];
+              
+              // Skip if this is an image link
+              if (link.querySelector('img')) continue;
+              
+              // Look for aria-hidden="true" span inside this link
+              const ariaHiddenSpan = link.querySelector('span[aria-hidden="true"]');
+              if (ariaHiddenSpan && !name) {
+                name = ariaHiddenSpan.textContent.trim().replace(/<!---->/g, '').trim();
+                break;
+              }
+            }
+          }
+        }
+        
+        // Strategy 3: Get name from image alt attribute
+        if (!name) {
+          const img = card.querySelector('img[alt]');
+          if (img && img.alt && !img.alt.includes('LinkedIn') && img.alt.length < 100) {
+            name = img.alt;
+          }
+        }
+        
+        // Strategy 4: Get name from Message button aria-label
+        if (!name) {
+          const messageBtn = card.querySelector('button[aria-label^="Message "]');
+          if (messageBtn) {
+            const ariaLabel = messageBtn.getAttribute('aria-label');
+            name = ariaLabel.replace('Message ', '').trim();
+          }
+        }
+        
+        if (!profileUrl) return;
+        
+        // Skip duplicates
+        if (seenUrls.has(profileUrl)) return;
+        seenUrls.add(profileUrl);
+        
+        // Extract username from URL
+        const usernameMatch = profileUrl.match(/\/in\/([^/?#]+)/);
+        const username = usernameMatch ? usernameMatch[1] : null;
+        
+        // Get title/headline and location from t-14 divs
+        let title = '';
+        let location = '';
+        
+        const allDivs = card.querySelectorAll('div');
+        let foundTitle = false;
+        
+        for (const div of allDivs) {
+          const classList = div.className || '';
+          const text = div.textContent.trim();
+          
+          // Primary subtitle (title/headline) - usually the first t-14 t-black div
+          if (classList.includes('t-14') && classList.includes('t-black') && !foundTitle && text.length > 0) {
+            title = text;
+            foundTitle = true;
+          }
+          
+          // Secondary subtitle (location) - t-14 t-normal without t-black
+          if (classList.includes('t-14') && classList.includes('t-normal') && !classList.includes('t-black')) {
+            // This could be location or other info
+            if (!text.includes('followers') && !text.includes('connections') && text.length < 100) {
+              location = text;
+            }
+          }
+        }
+        
+        // Get connection degree (1st, 2nd, 3rd)
+        let connectionDegree = '';
+        const allSpans = card.querySelectorAll('span');
+        for (const span of allSpans) {
+          const text = span.textContent.trim();
+          if (text.match(/^(1st|2nd|3rd|LinkedIn Member)$/)) {
+            connectionDegree = text;
+            break;
+          }
+        }
+        
+        // Get summary/snippet
+        let summary = '';
+        const pEl = card.querySelector('p');
+        if (pEl) {
+          summary = pEl.textContent.trim().replace(/<!---->/g, '').trim();
+        }
+        
+        console.log('LinkedIn scraper: Parsed person:', { name, username, profileUrl, title, location });
+        
+        if (name && profileUrl) {
+          results.push({
+            name: name,
+            username: username,
+            profileUrl: profileUrl,
+            title: title,
+            location: location,
+            connectionDegree: connectionDegree,
+            summary: summary
+          });
+        }
+      } catch (err) {
+        console.error('Error parsing people card:', err);
+      }
+    });
+    
+    // Check if there's a next page - try multiple selectors
+    let hasNextPage = false;
+    const nextSelectors = [
+      'button[aria-label="Next"]',
+      'button[aria-label="Forward"]',
+      '.artdeco-pagination__button--next',
+      'button.artdeco-pagination__button--next'
+    ];
+    
+    for (const selector of nextSelectors) {
+      const nextButton = document.querySelector(selector);
+      if (nextButton && !nextButton.disabled) {
+        hasNextPage = true;
+        break;
+      }
+    }
+    
+    // Also check if we found any results - if we did, assume there might be more
+    if (results.length >= 10) {
+      hasNextPage = true; // LinkedIn typically shows 10 results per page
+    }
+    
+    console.log('LinkedIn scraper: hasNextPage =', hasNextPage, 'results =', results.length);
+    
+    return {
+      results: results,
+      hasNextPage: hasNextPage,
+      totalFound: results.length
+    };
+    
+  } catch (err) {
+    console.error('LinkedIn scraper error:', err);
+    return { error: `Scraping failed: ${err.message}` };
+  }
+}
+
 // This function runs in the context of the LinkedIn profile page to send a message
 function clickMessageButton(message) {
   return new Promise((resolve) => {
@@ -430,10 +822,8 @@ function clickConnectButton() {
   return new Promise((resolve) => {
     // Find and click Connect button directly on the profile page
     function findAndClickConnectButton() {
-      const allButtons = document.querySelectorAll('button, a');
 
-      console.log('LinkedIn Auto-Connect: Looking for Connect button on page...');
-
+      kjalsdjfkla \\
       let connectBtn = null;
       for (const btn of allButtons) {
         const ariaLabel = btn.getAttribute('aria-label') || '';
@@ -787,6 +1177,81 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         } catch (err) {
           console.error('Failed to open tab:', err);
           sendResponse({ success: false, error: err.message });
+        }
+        break;
+
+      case 'scrapeLinkedInSearch':
+        // Open LinkedIn search in new tab, scrape results, close tab
+        try {
+          console.log('LinkedIn Auto-Connect: Opening search tab:', request.url);
+          
+          const searchTab = await chrome.tabs.create({
+            url: request.url,
+            active: false // Open in background
+          });
+
+          // Wait for page to load
+          await new Promise((resolve) => {
+            chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+              if (tabId === searchTab.id && info.status === 'complete') {
+                chrome.tabs.onUpdated.removeListener(listener);
+                resolve();
+              }
+            });
+          });
+
+          // Wait for initial content to load
+          await new Promise(r => setTimeout(r, 2000));
+
+          // Scroll down to load all lazy-loaded results
+          await chrome.scripting.executeScript({
+            target: { tabId: searchTab.id },
+            func: () => {
+              // Scroll to bottom to trigger lazy loading
+              window.scrollTo(0, document.body.scrollHeight);
+            }
+          });
+
+          // Wait for lazy-loaded content
+          await new Promise(r => setTimeout(r, 1500));
+
+          // Scroll back to top
+          await chrome.scripting.executeScript({
+            target: { tabId: searchTab.id },
+            func: () => {
+              window.scrollTo(0, 0);
+            }
+          });
+
+          // Wait a bit more for any final rendering
+          await new Promise(r => setTimeout(r, 1000));
+
+          // Execute appropriate scraper based on type
+          const scrapeFunc = request.type === 'companies' 
+            ? scrapeCompanySearchResults 
+            : scrapePeopleSearchResults;
+
+          const scrapeResults = await chrome.scripting.executeScript({
+            target: { tabId: searchTab.id },
+            func: scrapeFunc
+          });
+
+          const scrapeResult = scrapeResults[0]?.result;
+
+          // Wait 500ms before closing (rate limit protection)
+          await new Promise(r => setTimeout(r, 500));
+
+          // Close the tab
+          await chrome.tabs.remove(searchTab.id);
+
+          console.log('LinkedIn Auto-Connect: Scraped results:', scrapeResult);
+          sendResponse(scrapeResult);
+
+        } catch (err) {
+          console.error('LinkedIn Auto-Connect: Scraping error:', err);
+          sendResponse({ 
+            error: `LinkedIn search failed: ${err.message}. You may need to verify your account or wait before searching again.`
+          });
         }
         break;
 

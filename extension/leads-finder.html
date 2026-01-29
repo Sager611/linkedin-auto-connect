@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>LinkedIn Lead Finder</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      margin: 0;
+      padding: 20px;
+      background: #f3f6f8;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 24px;
+      margin: 0 0 20px 0;
+      color: #0a66c2;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h1 .back-link {
+      font-size: 14px;
+      color: #666;
+      text-decoration: none;
+      margin-left: auto;
+    }
+    h1 .back-link:hover {
+      color: #0a66c2;
+    }
+    
+    /* Step Indicator */
+    .steps-indicator {
+      display: flex;
+      margin-bottom: 24px;
+      gap: 8px;
+    }
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: #fff;
+      border-radius: 8px;
+      flex: 1;
+      border: 2px solid #e0e0e0;
+      transition: all 0.2s;
+    }
+    .step-item.active {
+      border-color: #0a66c2;
+      background: #e8f4fd;
+    }
+    .step-item.completed {
+      border-color: #057642;
+      background: #e8f5e9;
+    }
+    .step-number {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #e0e0e0;
+      color: #666;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .step-item.active .step-number {
+      background: #0a66c2;
+      color: white;
+    }
+    .step-item.completed .step-number {
+      background: #057642;
+      color: white;
+    }
+    .step-text {
+      font-weight: 500;
+      color: #333;
+    }
+    .step-item.active .step-text {
+      color: #0a66c2;
+    }
+    .step-item.completed .step-text {
+      color: #057642;
+    }
+    
+    /* Cards */
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .card-title {
+      font-weight: 600;
+      font-size: 16px;
+      margin: 0 0 16px 0;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title .badge {
+      font-size: 11px;
+      background: #e8f5e9;
+      color: #057642;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+    .card-title .badge-blue {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+    
+    /* Form elements */
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+    label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: #333;
+    }
+    label .hint {
+      font-weight: 400;
+      color: #666;
+      font-size: 12px;
+    }
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus {
+      outline: none;
+      border-color: #0a66c2;
+      box-shadow: 0 0 0 2px rgba(10, 102, 194, 0.1);
+    }
+    .input-row {
+      display: flex;
+      gap: 12px;
+    }
+    .input-row .form-group {
+      flex: 1;
+    }
+    
+    /* Multi-select checkboxes */
+    .checkbox-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: #f5f5f5;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.15s;
+      border: 1px solid transparent;
+    }
+    .checkbox-item:hover {
+      background: #e8f4fd;
+    }
+    .checkbox-item.selected {
+      background: #e8f4fd;
+      border-color: #0a66c2;
+    }
+    .checkbox-item input[type="checkbox"] {
+      display: none;
+    }
+    .checkbox-item label {
+      margin: 0;
+      cursor: pointer;
+      font-weight: 400;
+      font-size: 13px;
+    }
+    
+    /* Buttons */
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 20px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s;
+    }
+    .btn-primary {
+      background: #0a66c2;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #004182;
+    }
+    .btn-primary:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: #eee;
+      color: #333;
+    }
+    .btn-secondary:hover {
+      background: #ddd;
+    }
+    .btn-success {
+      background: #057642;
+      color: white;
+    }
+    .btn-success:hover {
+      background: #045e35;
+    }
+    .btn-success:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .btn-small {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+    .search-btn {
+      width: 100%;
+      padding: 14px;
+      font-size: 16px;
+      margin-top: 8px;
+    }
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    
+    /* Results */
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .results-count {
+      color: #666;
+      font-size: 13px;
+    }
+    .results-list {
+      max-height: 500px;
+      overflow-y: auto;
+    }
+    .result-item {
+      display: flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-bottom: 1px solid #eee;
+      gap: 10px;
+    }
+    .result-item:last-child {
+      border-bottom: none;
+    }
+    .result-item:hover {
+      background: #f9f9f9;
+    }
+    .result-checkbox {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .result-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .result-name {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 2px;
+      font-size: 13px;
+    }
+    .result-name a {
+      color: inherit;
+      text-decoration: none;
+    }
+    .result-name a:hover {
+      color: #0a66c2;
+      text-decoration: underline;
+    }
+    .result-title {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 1px;
+    }
+    .result-details {
+      color: #888;
+      font-size: 11px;
+      line-height: 1.3;
+    }
+    .result-badge {
+      font-size: 10px;
+      background: #f0f0f0;
+      color: #666;
+      padding: 1px 6px;
+      border-radius: 10px;
+      margin-left: 6px;
+    }
+    .result-badge.in-queue-badge {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+    .result-item.in-queue {
+      opacity: 0.6;
+      background: #f9f9f9;
+    }
+    .result-item.in-queue .result-checkbox {
+      cursor: not-allowed;
+    }
+    
+    /* Status messages */
+    .status-message {
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-top: 16px;
+    }
+    .status-message.success {
+      background: #e8f5e9;
+      color: #057642;
+    }
+    .status-message.error {
+      background: #ffebee;
+      color: #c62828;
+    }
+    .status-message.info {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+    .status-message.warning {
+      background: #fff3e0;
+      color: #e65100;
+    }
+    
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+    .loading-spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 3px solid #eee;
+      border-top-color: #0a66c2;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 12px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .loading-progress {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #666;
+    }
+    
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+    
+    /* Select all row */
+    .select-all-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    
+    /* Hidden */
+    .hidden {
+      display: none !important;
+    }
+    
+    /* Selected companies summary */
+    .selected-summary {
+      padding: 12px 16px;
+      background: #e8f4fd;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .selected-summary-text {
+      color: #0a66c2;
+      font-weight: 500;
+    }
+    .selected-companies-list {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>
+      LinkedIn Lead Finder
+      <a href="#" class="back-link" id="back-to-popup">Back to Extension</a>
+    </h1>
+
+    <!-- Step Indicator -->
+    <div class="steps-indicator">
+      <div class="step-item active" id="step1-indicator">
+        <div class="step-number">1</div>
+        <div class="step-text">Find Companies</div>
+      </div>
+      <div class="step-item" id="step2-indicator">
+        <div class="step-number">2</div>
+        <div class="step-text">Find People</div>
+      </div>
+    </div>
+
+    <!-- STEP 1: Company Search -->
+    <div id="step1-container">
+      <div class="card">
+        <div class="card-title">
+          Company Search Filters
+          <span class="badge badge-blue">Native LinkedIn Search</span>
+        </div>
+        
+        <div class="form-group">
+          <label>Industries <span class="hint">(select one or more)</span></label>
+          <div class="checkbox-group" id="industry-checkboxes">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Locations <span class="hint">(select one or more)</span></label>
+          <div class="checkbox-group" id="location-checkboxes">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Company Size <span class="hint">(select one or more)</span></label>
+          <div class="checkbox-group" id="size-checkboxes">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <div class="input-row">
+          <div class="form-group">
+            <label>Keywords <span class="hint">(optional)</span></label>
+            <input type="text" id="company-keywords" placeholder="e.g., robotics, automation">
+          </div>
+          <div class="form-group">
+            <label>Max Pages <span class="hint">(10 results per page)</span></label>
+            <input type="number" id="max-pages" value="5" min="1" max="100">
+          </div>
+        </div>
+
+        <button class="btn btn-primary search-btn" id="search-companies-btn">
+          Search Companies on LinkedIn
+        </button>
+      </div>
+
+      <!-- Company Results -->
+      <div class="card hidden" id="company-results-card">
+        <div class="results-header">
+          <div>
+            <div class="card-title" style="margin:0;">
+              Company Results
+              <span class="results-count" id="company-results-count"></span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-small" id="load-more-companies-btn">
+              Load More
+            </button>
+            <button class="btn btn-success" id="proceed-to-step2-btn" disabled>
+              Search People at Selected (0)
+            </button>
+          </div>
+        </div>
+
+        <div id="company-results-container">
+          <!-- Results will be inserted here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2: People Search -->
+    <div id="step2-container" class="hidden">
+      <div class="card">
+        <div class="card-title">
+          People Search
+        </div>
+        
+        <div class="selected-summary" id="selected-companies-summary">
+          <div>
+            <div class="selected-summary-text">
+              Searching at <span id="selected-count">0</span> companies
+            </div>
+            <div class="selected-companies-list" id="selected-companies-list">
+              <!-- Company names will be listed here -->
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-small" id="back-to-step1-btn">
+            Change Companies
+          </button>
+        </div>
+
+        <div class="input-row">
+          <div class="form-group">
+            <label>Role Title / Keywords</label>
+            <input type="text" id="people-keywords" placeholder="e.g., VP Engineering, CTO, Head of Product">
+          </div>
+          <div class="form-group">
+            <label>Max Pages <span class="hint">(10 results per page)</span></label>
+            <input type="number" id="people-max-pages" value="5" min="1" max="100">
+          </div>
+        </div>
+
+        <button class="btn btn-primary search-btn" id="search-people-btn">
+          Search People on LinkedIn
+        </button>
+      </div>
+
+      <!-- People Results -->
+      <div class="card hidden" id="people-results-card">
+        <div class="results-header">
+          <div>
+            <div class="card-title" style="margin:0;">
+              People Results
+              <span class="results-count" id="people-results-count"></span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-small" id="load-more-people-btn">
+              Load More
+            </button>
+            <button class="btn btn-success" id="add-to-queue-btn" disabled>
+              Add Selected to Queue (0)
+            </button>
+          </div>
+        </div>
+
+        <div id="people-results-container">
+          <!-- Results will be inserted here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Message -->
+    <div id="status-container"></div>
+  </div>
+
+  <script src="linkedin-ids.js"></script>
+  <script src="leads-finder.js"></script>
+</body>
+</html>

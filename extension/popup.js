@@ -255,7 +255,9 @@ async function updateUI() {
     if (currentFilter === 'all') return true;
     const username = getUsername(item.profileUrl);
     const isAccepted = username && acceptedUsernames.has(username);
-    const effectiveStatus = isAccepted ? 'connected' : item.status;
+    // Consider connected if either detected from LinkedIn OR status was set to connected
+    const isConnected = isAccepted || item.status === 'connected';
+    const effectiveStatus = isConnected ? 'connected' : item.status;
     return effectiveStatus === currentFilter;
   });
 
@@ -270,7 +272,9 @@ async function updateUI() {
       .map(item => {
         const username = getUsername(item.profileUrl);
         const isAccepted = username && acceptedUsernames.has(username);
-        const displayStatus = isAccepted ? 'connected' : item.status;
+        // Consider connected if either detected from LinkedIn OR status was set to connected
+        const isConnected = isAccepted || item.status === 'connected';
+        const displayStatus = isConnected ? 'connected' : item.status;
         const formatConnectedDate = (isoDate) => {
           if (!isoDate) return 'Connected';
           const d = new Date(isoDate);
@@ -282,15 +286,16 @@ async function updateUI() {
           const minutes = pad(d.getMinutes());
           return `Connected - ${year}.${month}.${day} ${hours}:${minutes}`;
         };
-        const statusText = isAccepted ? formatConnectedDate(item.connectedAt) : (item.status + (item.status === 'failed' && item.error ? ': ' + escapeHtml(item.error) : ''));
+        // Show formatted date if connected (either way) and connectedAt exists
+        const statusText = isConnected ? formatConnectedDate(item.connectedAt) : (item.status + (item.status === 'failed' && item.error ? ': ' + escapeHtml(item.error) : ''));
         return `
-        <div class="queue-item ${isAccepted ? 'accepted' : ''}" data-id="${item.id}">
+        <div class="queue-item ${isConnected ? 'accepted' : ''}" data-id="${item.id}">
           <button class="queue-item-message" data-id="${item.id}" data-url="${escapeHtml(item.profileUrl)}" data-name="${escapeHtml(item.name)}" title="Send message">✉</button>
           <div class="queue-item-info" data-url="${escapeHtml(item.profileUrl)}" title="Click to open profile">
             <div class="queue-item-name">${escapeHtml(item.name)}</div>
             <div class="queue-item-status ${displayStatus}">${statusText}</div>
           </div>
-          ${item.status === 'failed' && !isAccepted ? `<button class="queue-item-retry" data-id="${item.id}" title="Retry">↻</button>` : ''}
+          ${item.status === 'failed' && !isConnected ? `<button class="queue-item-retry" data-id="${item.id}" title="Retry">↻</button>` : ''}
           <button class="queue-item-remove" data-id="${item.id}" title="Remove">×</button>
         </div>
       `})
@@ -435,6 +440,11 @@ document.getElementById('message-template').addEventListener('input', onTemplate
 document.getElementById('queue-filter').addEventListener('change', (e) => {
   currentFilter = e.target.value;
   updateUI();
+});
+
+// Find Leads button - opens lead finder page in new tab
+document.getElementById('find-leads-btn').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('leads-finder.html') });
 });
 
 // Initialize
